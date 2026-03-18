@@ -713,6 +713,15 @@ class SatuSehat extends BaseController
                 ];
             }
 
+            if (empty($row['EcounterSatuSehat'])) {
+                $finalResults[] = [
+                    'regno' => $row['Regno'],
+                    'encounter' => $encounterRes,
+                    'message' => 'Belum memiliki Encounter ID'
+                ];
+                continue;
+            }
+
             $conditionRes = $this->processRowConditions($row);
             foreach ($conditionRes as $key => $res) {
                 if (isset($res['id'])) {
