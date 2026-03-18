@@ -799,6 +799,7 @@ class SatuSehat extends BaseController
                     'resourceID' => $procedureRes['id'],
                 ];
             }
+            $episodeOfCareRes = [];
             if ($row['KdPoli'] == '45' || $row['KdPoli'] == '44' || $row['KdPoli'] == '31') // POLI EDELWEIS / HIV / DOT / TBC / HEMODIALISA / CUCI DARAH
             {
                 $episodeOfCareController = new EpisodeOfCare($this->service);
