@@ -76,14 +76,11 @@ class SatuSehat extends BaseController
         if (empty($nik)) {
             return 'IHS dan NIK kosong, tidak bisa resolve pasien.';
         }
-        if (empty($row['IHSSatuSehat'])) {
-            return ['status' => false, 'message' => 'IHSSatuSehat missing'];
-        }
         if (empty($row['KdDocSatuSehat'])) {
-            return ['status' => false, 'message' => 'KdDocSatuSehat missing'];
+            return 'KdDocSatuSehat missing. (Dokter belum di-mapping ke SatuSehat)';
         }
         if (empty($row['IdRuanganKemenkes'])) {
-            return ['status' => false, 'message' => 'IdRuanganKemenkes missing'];
+            return 'IdRuanganKemenkes missing. (Ruangan/Poli belum di-mapping ke SatuSehat)';
         }
 
         try {
