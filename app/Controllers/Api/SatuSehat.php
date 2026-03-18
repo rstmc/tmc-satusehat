@@ -74,6 +74,15 @@ class SatuSehat extends BaseController
                 'message' => 'Sudah ada'
             ];
         }
+        if (empty($row['IHSSatuSehat'])) {
+            return ['status' => false, 'message' => 'IHSSatuSehat missing'];
+        }
+        if (empty($row['KdDocSatuSehat'])) {
+            return ['status' => false, 'message' => 'KdDocSatuSehat missing'];
+        }
+        if (empty($row['IdRuanganKemenkes'])) {
+            return ['status' => false, 'message' => 'IdRuanganKemenkes missing'];
+        }
 
         try {
             $dateOnly = date('Y-m-d', strtotime($row['Regdate']));
