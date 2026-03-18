@@ -15,16 +15,34 @@ abstract class MedicationStatementBase
 
     protected function sendFHIRMedicationStatement($payload)
     {
-        try {
-            $response = $this->service->post('MedicationStatement', $payload);
-            
-            if (isset($response['id'])) {
-                return ['status' => 'success', 'id' => $response['id']];
-            } else {
-                return ['status' => 'failed', 'response' => $response];
-            }
-        } catch (\Exception $e) {
-            return ['status' => 'error', 'message' => $e->getMessage()];
+        $extraHeaders = [];
+
+        $identifier = $payload['identifier'][0] ?? null;
+        $identifierSystem = is_array($identifier) ? trim((string) ($identifier['system'] ?? '')) : '';
+        $identifierValue = is_array($identifier) ? trim((string) ($identifier['value'] ?? '')) : '';
+
+        if ($identifierSystem !== '' && $identifierValue !== '') {
+            $extraHeaders['If-None-Exist'] = 'identifier=' . $identifierSystem . '|' . $identifierValue;
         }
+
+        try {
+            $response = $this->service->post('MedicationStatement', $payload, $extraHeaders);
+        } catch (\Exception $e) {
+            if (!empty($extraHeaders)) {
+                try {
+                    $response = $this->service->post('MedicationStatement', $payload);
+                } catch (\Exception $retryException) {
+                    return ['status' => 'error', 'message' => $retryException->getMessage()];
+                }
+            } else {
+                return ['status' => 'error', 'message' => $e->getMessage()];
+            }
+        }
+
+        if (isset($response['id'])) {
+            return ['status' => 'success', 'id' => $response['id']];
+        }
+
+        return ['status' => 'failed', 'response' => $response];
     }
 }

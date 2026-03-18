@@ -799,16 +799,18 @@ class SatuSehat extends BaseController
                     'resourceID' => $procedureRes['id'],
                 ];
             }
-
-            $episodeOfCareController = new EpisodeOfCare($this->service);
-            $episodeOfCareRes = $episodeOfCareController->push($row, $row['EcounterSatuSehat'], $keluhanUtamaId);
-            if (isset($episodeOfCareRes['id'])) {
-                $logsToInsert[] = [
-                    'Regno' => $row['Regno'],
-                    'resourceType' => 'EpisodeOfCare',
-                    'resourceSubType' => 'episode_of_care',
-                    'resourceID' => $episodeOfCareRes['id'],
-                ];
+            if ($row['KdPoli'] == '45' || $row['KdPoli'] == '44' || $row['KdPoli'] == '31') // POLI EDELWEIS / HIV / DOT / TBC / HEMODIALISA / CUCI DARAH
+            {
+                $episodeOfCareController = new EpisodeOfCare($this->service);
+                $episodeOfCareRes = $episodeOfCareController->push($row, $row['EcounterSatuSehat'], $keluhanUtamaId);
+                if (isset($episodeOfCareRes['id'])) {
+                    $logsToInsert[] = [
+                        'Regno' => $row['Regno'],
+                        'resourceType' => 'EpisodeOfCare',
+                        'resourceSubType' => 'episode_of_care',
+                        'resourceID' => $episodeOfCareRes['id'],
+                    ];
+                }
             }
 
             $allergyController = new AllergyIntolerance($this->service);
@@ -907,15 +909,13 @@ class SatuSehat extends BaseController
             }
 
             $medStatementRes = $this->processRowMedicationStatement($row);
-            foreach ($medStatementRes as $msItem) {
-                if (isset($msItem['result']['id'])) {
-                    $logsToInsert[] = [
-                        'Regno' => $row['Regno'],
-                        'resourceType' => 'MedicationStatement',
-                        'resourceSubType' => $msItem['kode_obat'] ?? 'medication_statement',
-                        'resourceID' => $msItem['result']['id'],
-                    ];
-                }
+            if (is_array($medStatementRes) && isset($medStatementRes['result']['id'])) {
+                $logsToInsert[] = [
+                    'Regno' => $row['Regno'],
+                    'resourceType' => 'MedicationStatement',
+                    'resourceSubType' => $medStatementRes['kode_obat'] ?? 'medication_statement',
+                    'resourceID' => $medStatementRes['result']['id'],
+                ];
             }
 
             $drController = new DiagnosticReport($this->service);
@@ -1266,31 +1266,44 @@ class SatuSehat extends BaseController
             $items = $apotekModel->getObatByRegno($row['Regno']);
         }
 
-        $results = [];
         $msController = new MedicationStatement($this->service);
 
+        $candidates = [];
         foreach ($items as $item) {
-            // Check if item has KFA code (MasterObat.KFA)
-            if (empty($item['KFA'])) {
-                $results[] = [
-                    'kode_obat' => $item['KodeObat'],
-                    'nama_obat' => $item['NamaObat'],
-                    'status' => 'skipped',
-                    'message' => 'No KFA code in MasterObat'
-                ];
-                continue;
+            if (!empty($item['KFA'])) {
+                $candidates[] = $item;
             }
-
-            $msData = array_merge($row, $item);
-            $res = $msController->push($msData, $row['EcounterSatuSehat']);
-
-            $results[] = [
-                'kode_obat' => $item['KodeObat'],
-                'kfa' => $item['KFA'],
-                'result' => $res
-            ];
         }
 
-        return $results;
+        if (empty($candidates)) {
+            if (empty($items)) {
+                return ['status' => 'skipped', 'message' => 'Tidak ada data obat'];
+            }
+            return ['status' => 'skipped', 'message' => 'Tidak ada obat dengan KFA di MasterObat'];
+        }
+
+        usort($candidates, static function ($a, $b) {
+            $aKode = (string)($a['KodeObat'] ?? '');
+            $bKode = (string)($b['KodeObat'] ?? '');
+            $cmp = strcmp($aKode, $bKode);
+            if ($cmp !== 0) {
+                return $cmp;
+            }
+            $aKfa = (string)($a['KFA'] ?? '');
+            $bKfa = (string)($b['KFA'] ?? '');
+            return strcmp($aKfa, $bKfa);
+        });
+
+        $picked = $candidates[0];
+
+        $msData = array_merge($row, $picked);
+        $res = $msController->push($msData, $row['EcounterSatuSehat']);
+
+        return [
+            'kode_obat' => $picked['KodeObat'] ?? null,
+            'nama_obat' => $picked['NamaObat'] ?? null,
+            'kfa' => $picked['KFA'] ?? null,
+            'result' => $res,
+        ];
     }
 }

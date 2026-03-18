@@ -22,10 +22,8 @@ class MedicationStatement extends MedicationStatementBase
         }
 
         $orgId = getenv('SATUSEHAT_ORG_ID');
-        
-        // Construct unique identifier for this statement
-        // Using NoResep + KodeObat or BLCode + KodeObat
-        $identifierValue = ($row['NoResep'] ?? $row['Regno']) . '-' . ($row['KodeObat'] ?? 'UNK');
+
+        $identifierValue = ($row['Regno'] ?? ($row['NoResep'] ?? '')) . '-medication-statement';
 
         $dateInput = $row['TglResep'] ?? $row['RegDate'] ?? $row['Regdate'] ?? null;
         $timeInput = $row['RegTime'] ?? $row['Jam'] ?? '00:00:00';
@@ -114,7 +112,7 @@ class MedicationStatement extends MedicationStatementBase
                 ]
             ]
         ];
-        
+
         // Optional: Add dosage timing if Signa1/Signa2 available and numeric
         if (isset($row['Signa1']) && is_numeric($row['Signa1'])) {
             $payload['dosage'][0]['timing'] = [
