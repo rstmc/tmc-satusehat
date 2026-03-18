@@ -3,15 +3,9 @@
 namespace App\Controllers\Api\SatuSehat\DiagnosticReport\Laboratorium;
 
 use App\Controllers\Api\SatuSehat\DiagnosticReport\DiagnosticReportBase;
-use App\Services\SatusehatService;
 
 class LaboratoriumDiagnosticReport extends DiagnosticReportBase
 {
-    public function __construct()
-    {
-        parent::__construct(new SatusehatService());
-    }
-
     public function push($row, $encounterId)
     {
         $orgId = getenv('SATUSEHAT_ORG_ID');
@@ -34,7 +28,7 @@ class LaboratoriumDiagnosticReport extends DiagnosticReportBase
         if (strpos($asalSampel, 'sputum') !== false || strpos($asalSampel, 'dahak') !== false || $kategori === 'MB' || $kategori === 'MIKROBIOLOGI') {
             $categoryCode = "MB";
             $categoryDisplay = "Microbiology";
-             
+
             // Specific check for Sputum/Acid fast stain
             if (strpos($asalSampel, 'sputum') !== false || strpos($asalSampel, 'dahak') !== false) {
                 $loincCode = "11477-7";
@@ -94,7 +88,7 @@ class LaboratoriumDiagnosticReport extends DiagnosticReportBase
             "basedOn" => [], // To be populated
             "conclusion" => $row['Kesan'] ?? ''
         ];
-        
+
         // Add Conclusion Code if available
         if (!empty($row['Kesan'])) {
             $kesan = strtolower($row['Kesan']);
@@ -123,7 +117,7 @@ class LaboratoriumDiagnosticReport extends DiagnosticReportBase
                 ];
             }
         }
-        
+
         if (!empty($row['SpecimenId'])) {
             $payload['specimen'][] = [
                 "reference" => "Specimen/" . $row['SpecimenId']

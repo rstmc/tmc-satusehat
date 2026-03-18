@@ -11,16 +11,16 @@ class QuestionnaireResponse extends QuestionnaireResponseBase
         }
 
         $authored = isset($row['Authored']) ? date('c', strtotime($row['Authored'])) : null;
-        
+
         if (!$authored) {
             $regDate = $row['RegDate'] ?? $row['Regdate'] ?? date('Y-m-d');
             $regTime = $row['RegTime'] ?? $row['Regtime'] ?? date('H:i:s');
-            
+
             // Basic validation
             if (empty($regDate) || $regDate === '0000-00-00') {
                 $regDate = date('Y-m-d');
             }
-            
+
             $timestamp = strtotime("$regDate $regTime");
             if ($timestamp === false || $timestamp < 0) {
                 $timestamp = time();
@@ -41,7 +41,7 @@ class QuestionnaireResponse extends QuestionnaireResponseBase
             ],
             "authored" => $authored,
             "author" => [
-                "reference" => "Practitioner/" . ($row['KdDocSatuSehat'] ?? 'N10000001')
+                "reference" => "Practitioner/" . ($row['KdDocSatuSehat'] ?? '')
             ],
             "source" => [
                 "reference" => "Patient/" . $row['IHSSatuSehat']

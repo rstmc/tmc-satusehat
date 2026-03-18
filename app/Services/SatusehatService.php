@@ -83,18 +83,22 @@ class SatusehatService
         }
     }
 
-    public function post(string $resource, array $payload): array
+    public function post(string $resource, array $payload, array $extraHeaders = []): array
     {
         $token = $this->token();
         
         try {
+            $headers = array_merge(
+                [
+                    'Authorization' => "Bearer {$token}",
+                    'Content-Type'  => getenv('SATUSEHAT_CONTENT_TYPE') ?: 'application/json',
+                ],
+                $extraHeaders
+            );
             $res = $this->client->post(
                 getenv('SATUSEHAT_BASE_URL') . "/fhir-r4/v1/{$resource}",
                 [
-                    'headers' => [
-                        'Authorization' => "Bearer {$token}",
-                        'Content-Type'  => getenv('SATUSEHAT_CONTENT_TYPE') ?: 'application/json',
-                    ],
+                    'headers' => $headers,
                     'json' => $payload, // Gunakan 'json' option agar otomatis encode dan set content-type
                     'http_errors' => false,
                     'timeout' => (int)(getenv('SATUSEHAT_TIMEOUT') ?: 10),

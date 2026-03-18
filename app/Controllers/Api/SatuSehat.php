@@ -43,6 +43,7 @@ use App\Controllers\Api\SatuSehat\AllergyIntolerance\AllergyIntolerance;
 use App\Controllers\Api\SatuSehat\ServiceRequest\Laboratorium\LaboratoriumServiceRequest;
 use App\Controllers\Api\SatuSehat\Specimen\Laboratorium\LaboratoriumSpecimen;
 use App\Controllers\Api\SatuSehat\Observation\Laboratorium\LaboratoriumObservation;
+use App\Controllers\Api\SatuSehat\DiagnosticReport\Laboratorium\LaboratoriumDiagnosticReport;
 use App\Controllers\Api\SatuSehat\Procedure\Laboratorium\PanelNominal\StatusPuasa;
 use App\Controllers\Api\SatuSehat\DiagnosticReport\DiagnosticReport;
 use App\Controllers\Api\SatuSehat\Immunization\ImmunizationPush;
@@ -860,14 +861,6 @@ class SatuSehat extends BaseController
                             'resourceID' => $labItem['specimen']['id'],
                         ];
                     }
-                    if (isset($labItem['diagnostic_report']['id'])) {
-                        $logsToInsert[] = [
-                            'Regno' => $row['Regno'],
-                            'resourceType' => 'DiagnosticReport',
-                            'resourceSubType' => 'diagnostic_report',
-                            'resourceID' => $labItem['diagnostic_report']['id'],
-                        ];
-                    }
                     if (!empty($labItem['observation_ids'])) {
                         foreach ($labItem['observation_ids'] as $obsId) {
                             $logsToInsert[] = [
@@ -925,6 +918,29 @@ class SatuSehat extends BaseController
                 }
             }
 
+            $drController = new DiagnosticReport($this->service);
+            $diagnosticReportRes = [];
+            if (isset($labRes['results'])) {
+                foreach ($labRes['results'] as $idx => $labItem) {
+                    if (empty($labItem['dr_row']) || !is_array($labItem['dr_row'])) {
+                        continue;
+                    }
+
+                    $drRes = $drController->push($labItem['dr_row'], $row['EcounterSatuSehat']);
+                    $labRes['results'][$idx]['diagnostic_report'] = $drRes;
+                    $diagnosticReportRes[] = $drRes;
+
+                    if (isset($drRes['id'])) {
+                        $logsToInsert[] = [
+                            'Regno' => $row['Regno'],
+                            'resourceType' => 'DiagnosticReport',
+                            'resourceSubType' => 'diagnostic_report',
+                            'resourceID' => $drRes['id'],
+                        ];
+                    }
+                }
+            }
+
             $finalResults[] = [
                 'regno' => $row['Regno'],
                 'encounter' => $encounterRes,
@@ -941,6 +957,7 @@ class SatuSehat extends BaseController
                 'questionnaire_response' => $qrRes,
                 'medication' => $medicationRes,
                 'medication_statement' => $medStatementRes,
+                'diagnostic_report' => $diagnosticReportRes,
                 'lab_results' => $labRes,
             ];
         }
@@ -1067,7 +1084,6 @@ class SatuSehat extends BaseController
         $statusPuasaController = new StatusPuasa($this->service);
         $specimenController = new LaboratoriumSpecimen($this->service);
         $obsController = new LaboratoriumObservation($this->service);
-        $drController = new DiagnosticReport($this->service);
 
         foreach ($groupedResults as $noTran => $details) {
             if (empty($details)) continue;
@@ -1111,9 +1127,9 @@ class SatuSehat extends BaseController
                 }
             }
 
-            // 2.3 Send DiagnosticReport
-            $headerData['ObservationIds'] = $observationIds;
-            $drRes = $drController->push($headerData, $row['EcounterSatuSehat']);
+            $drRow = $headerData;
+            $drRow['NoTran'] = $noTran;
+            $drRow['ObservationIds'] = $observationIds;
 
             $labResults[] = [
                 'no_tran' => $noTran,
@@ -1121,7 +1137,7 @@ class SatuSehat extends BaseController
                 'status_puasa' => $statusPuasaRes,
                 'observation_ids' => $observationIds,
                 'observations_count' => count($observationIds),
-                'diagnostic_report' => $drRes,
+                'dr_row' => $drRow,
                 'service_request' => $serviceRequestResponses[$noTran] ?? $srFallbackRes
             ];
         }
