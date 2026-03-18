@@ -4,7 +4,7 @@ namespace App\Controllers\Api\SatuSehat\AllergyIntolerance;
 
 class AllergyIntolerance extends AllergyIntoleranceBase
 {
-    public function push($row, $encounterId)
+    public function buildPayload($row, $encounterId)
     {
         // Organization ID from environment or config
         $orgId = getenv('SATUSEHAT_ORG_ID');
@@ -14,7 +14,7 @@ class AllergyIntolerance extends AllergyIntoleranceBase
         $riwayatAlergi = $row['RiwayatAlergi'] ?? '1';
         
         if ($riwayatAlergi == '1') {
-            return ['status' => 'skipped', 'message' => 'Tidak ada riwayat alergi'];
+            return null; // Return null to indicate no payload
         }
 
         // RiwayatAlergiOpsi: 1=Obat, 2=Makanan, 3=Lainnya
@@ -46,7 +46,7 @@ class AllergyIntolerance extends AllergyIntoleranceBase
         // Using Regno + '-allergy-' + index or similar might be better if multiple allergies
         $regNo = $row['RegNo'] ?? $row['Regno'] ?? 'Unknown';
         $identifierValue = $regNo . '-allergy-' . time(); 
-
+        
         // Recorded Date
         $regDate = $row['RegDate'] ?? $row['Regdate'] ?? date('Y-m-d');
         $regTime = $row['RegTime'] ?? $row['Regtime'] ?? date('H:i:s');
@@ -146,6 +146,22 @@ class AllergyIntolerance extends AllergyIntoleranceBase
             // Let's use a generic 'Allergic reaction' code if we don't know
             $payload['reaction'][0]['manifestation'][0]['coding'][0]['code'] = '281647001';
             $payload['reaction'][0]['manifestation'][0]['coding'][0]['display'] = 'Adverse reaction';
+        }
+
+        return $payload;
+    }
+
+    public function push($row, $encounterId)
+    {
+        $payload = $this->buildPayload($row, $encounterId);
+        
+        if ($payload === null) {
+             // Replicate original check logic for consistency
+             $riwayatAlergi = $row['RiwayatAlergi'] ?? '1';
+             if ($riwayatAlergi == '1') {
+                return ['status' => 'skipped', 'message' => 'Tidak ada riwayat alergi'];
+             }
+             return null;
         }
 
         return $this->sendFHIRAllergyIntolerance($payload);

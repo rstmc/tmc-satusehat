@@ -6,7 +6,7 @@ use App\Controllers\Api\SatuSehat\DiagnosticReport\DiagnosticReportBase;
 
 class LaboratoriumDiagnosticReport extends DiagnosticReportBase
 {
-    public function push($row, $encounterId)
+    public function buildPayload($row, $encounterId)
     {
         $orgId = getenv('SATUSEHAT_ORG_ID');
         $reportId = $row['NoTran']; // Unique ID for Report
@@ -138,6 +138,12 @@ class LaboratoriumDiagnosticReport extends DiagnosticReportBase
             }
         }
 
+        return $payload;
+    }
+
+    public function push($row, $encounterId)
+    {
+        $payload = $this->buildPayload($row, $encounterId);
         return $this->sendFHIRDiagnosticReport($payload);
     }
 }

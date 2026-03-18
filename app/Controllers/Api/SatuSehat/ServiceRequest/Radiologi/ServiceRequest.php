@@ -126,8 +126,8 @@ class ServiceRequest extends ServiceRequestBase
                     "coding" => [
                         [
                             "system" => "http://hl7.org/fhir/sid/icd-10",
-                            "code" => $row['kdIcd'] ?? '',
-                            "display" => $row['NmIcd'] ?? ''
+                            "code" => (!empty($row['kdIcd']) ? $row['kdIcd'] : 'Z01.8'),
+                            "display" => (!empty($row['NmIcd']) ? $row['NmIcd'] : 'Other specified special examinations')
                         ]
                     ]
                 ]

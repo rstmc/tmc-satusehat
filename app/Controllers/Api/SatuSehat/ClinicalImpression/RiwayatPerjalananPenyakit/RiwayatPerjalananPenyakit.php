@@ -6,9 +6,8 @@ use App\Controllers\Api\SatuSehat\ClinicalImpression\ClinicalImpressionBase;
 
 class RiwayatPerjalananPenyakit extends ClinicalImpressionBase
 {
-    public function push($row, $encounterId)
+    public function buildPayload($row, $encounterId)
     {
-        // Pastikan ada data summary untuk dikirim
         if (empty($row['Assessment'])) {
             return null;
         }
@@ -44,6 +43,16 @@ class RiwayatPerjalananPenyakit extends ClinicalImpressionBase
             ],
             "summary" => $row['Assessment']
         ];
+
+        return $payload;
+    }
+
+    public function push($row, $encounterId)
+    {
+        $payload = $this->buildPayload($row, $encounterId);
+        if ($payload === null) {
+            return null;
+        }
 
         return $this->sendFHIRClinicalImpression($payload);
     }

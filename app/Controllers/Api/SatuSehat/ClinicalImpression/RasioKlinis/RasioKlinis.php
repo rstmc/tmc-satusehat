@@ -6,20 +6,17 @@ use App\Controllers\Api\SatuSehat\ClinicalImpression\ClinicalImpressionBase;
 
 class RasioKlinis extends ClinicalImpressionBase
 {
-    public function push($row, $encounterId)
+    public function buildPayload($row, $encounterId)
     {
-        // Validate required fields
         if (empty($row['IHSSatuSehat'])) {
             return null;
         }
 
-        // Format dates
         $dateOnly = date('Y-m-d', strtotime($row['Regdate'] ?? date('Y-m-d')));
         $timeOnly = date('H:i:s', strtotime($row['RegTime'] ?? date('H:i:s')));
         $dateTimeStr = $dateOnly . ' ' . $timeOnly;
         $effectiveDateTime = date('c', strtotime($dateTimeStr));
 
-        // Observation ID for Investigation
         $observationId = $row['Observation_Kuantitatif'] ?? '';
 
         $payload = [
@@ -67,6 +64,16 @@ class RasioKlinis extends ClinicalImpressionBase
             ],
             "summary" => $row['Summary'] ?? "Pasien datang dengan keluhan utama demam menggigil disertai sakit kepala. Hasil pemeriksaan penunjang mengarah pada kemungkinan pasien menderita Demam Berdarah"
         ];
+
+        return $payload;
+    }
+
+    public function push($row, $encounterId)
+    {
+        $payload = $this->buildPayload($row, $encounterId);
+        if ($payload === null) {
+            return null;
+        }
 
         return $this->sendFHIRClinicalImpression($payload);
     }

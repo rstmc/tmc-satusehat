@@ -6,7 +6,7 @@ use App\Controllers\Api\SatuSehat\ServiceRequest\ServiceRequestBase;
 
 class ServiceRequest extends ServiceRequestBase
 {
-    public function push($row, $encounterId)
+    public function buildPayload($row, $encounterId)
     {
         // Validate required fields
         if (empty($row['IHSSatuSehat']) || empty($row['KdDocSatuSehat'])) {
@@ -95,6 +95,16 @@ class ServiceRequest extends ServiceRequestBase
             $payload['supportingInfo'][] = [
                 "reference" => "Procedure/" . $row['Procedure_StatusPuasa_Nominal']
             ];
+        }
+
+        return $payload;
+    }
+
+    public function push($row, $encounterId)
+    {
+        $payload = $this->buildPayload($row, $encounterId);
+        if ($payload === null) {
+            return null;
         }
 
         return $this->sendFHIRServiceRequest($payload);

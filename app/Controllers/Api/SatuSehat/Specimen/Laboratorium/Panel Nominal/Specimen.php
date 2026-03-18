@@ -6,7 +6,7 @@ use App\Controllers\Api\SatuSehat\Specimen\SpecimenBase;
 
 class Specimen extends SpecimenBase
 {
-    public function push($row, $encounterId)
+    public function buildPayload($row, $encounterId)
     {
         // Validate required fields
         if (empty($row['IHSSatuSehat'])) {
@@ -107,11 +107,25 @@ class Specimen extends SpecimenBase
 
         // Add request reference if ServiceRequest_Nominal is available
         if (!empty($row['ServiceRequest_Nominal'])) {
+            $reqRef = $row['ServiceRequest_Nominal'];
+            if (strpos($reqRef, 'urn:uuid:') !== 0) {
+                $reqRef = "ServiceRequest/" . $reqRef;
+            }
             $payload['request'] = [
                 [
-                    "reference" => "ServiceRequest/" . $row['ServiceRequest_Nominal']
+                    "reference" => $reqRef
                 ]
             ];
+        }
+
+        return $payload;
+    }
+
+    public function push($row, $encounterId)
+    {
+        $payload = $this->buildPayload($row, $encounterId);
+        if ($payload === null) {
+            return null;
         }
 
         return $this->sendFHIRSpecimen($payload);

@@ -4,7 +4,7 @@ namespace App\Controllers\Api\SatuSehat\Composition;
 
 class EdukasiDiet extends CompositionBase
 {
-    public function push($row, $encounterId)
+    public function buildPayload($row, $encounterId)
     {
         $orgId = getenv('SATUSEHAT_ORG_ID');
 
@@ -13,9 +13,9 @@ class EdukasiDiet extends CompositionBase
 
         $regDate = date('Y-m-d', strtotime($regDateInput));
         $regTime = date('H:i:s', strtotime($regTimeInput));
-        
+
         $compositionDate = date('c', strtotime("$regDate $regTime"));
-        
+
         $identifierValue = $row['NoRawat'] ?? 'DOC-' . date('YmdHis');
 
         $edukasiDietText = 'Tidak butuh diet';
@@ -87,6 +87,16 @@ class EdukasiDiet extends CompositionBase
                 ]
             ]
         ];
+
+        return $payload;
+    }
+
+    public function push($row, $encounterId)
+    {
+        $payload = $this->buildPayload($row, $encounterId);
+        if ($payload === null) {
+            return null;
+        }
 
         return $this->sendFHIRComposition($payload);
     }

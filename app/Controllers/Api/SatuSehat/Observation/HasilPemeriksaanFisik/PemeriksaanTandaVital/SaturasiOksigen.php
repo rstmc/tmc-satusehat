@@ -6,7 +6,7 @@ use App\Controllers\Api\SatuSehat\Observation\ObservationBase;
 
 class SaturasiOksigen extends ObservationBase
 {
-    public function push($row, $encounterId)
+    public function buildPayload($row, $encounterId)
     {
         // Ambil nilai SpO2 (sesuaikan nama field DB) 
         $spo2 = $row['SpO2'] ?? null;
@@ -66,6 +66,16 @@ class SaturasiOksigen extends ObservationBase
                 "code" => "%"
             ]
         ];
+
+        return $payload;
+    }
+
+    public function push($row, $encounterId)
+    {
+        $payload = $this->buildPayload($row, $encounterId);
+        if ($payload === null) {
+            return null;
+        }
 
         return $this->sendFHIRObservation($payload);
     }

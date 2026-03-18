@@ -6,7 +6,7 @@ use App\Controllers\Api\SatuSehat\Procedure\ProcedureBase;
 
 class StatusPuasa extends ProcedureBase
 {
-    public function push($row, $encounterId)
+    public function buildPayload($row, $encounterId)
     {
         // Validate required fields
         if (empty($row['IHSSatuSehat']) || empty($row['KdDocSatuSehat'])) {
@@ -43,7 +43,7 @@ class StatusPuasa extends ProcedureBase
             ],
             "subject" => [
                 "reference" => "Patient/" . $row['IHSSatuSehat'],
-                "display" => $row['Firstname'] ?? $row['Firstname'] ?? ''
+                "display" => $row['Firstname'] ?? ''
             ],
             "encounter" => [
                 "reference" => "Encounter/" . $encounterId
@@ -66,6 +66,17 @@ class StatusPuasa extends ProcedureBase
                 ]
             ]
         ];
+
+        return $payload;
+    }
+
+    public function push($row, $encounterId)
+    {
+        $payload = $this->buildPayload($row, $encounterId);
+
+        if ($payload === null) {
+            return null;
+        }
 
         return $this->sendFHIRProcedure($payload);
     }

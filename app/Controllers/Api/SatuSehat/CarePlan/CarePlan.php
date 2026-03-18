@@ -4,9 +4,8 @@ namespace App\Controllers\Api\SatuSehat\CarePlan;
 
 class CarePlan extends CarePlanBase
 {
-    public function push($row, $encounterId, $goalId = null)
+    public function buildPayload($row, $encounterId, $goalId = null)
     {
-        // IHS SatuSehat is required for the patient reference
         if (empty($row['IHSSatuSehat'])) {
             return null;
         }
@@ -66,6 +65,16 @@ class CarePlan extends CarePlanBase
                 "reference" => "Practitioner/" . ($row['KdDocSatuSehat'] ?? 'N10000001')
             ]
         ];
+
+        return $payload;
+    }
+
+    public function push($row, $encounterId, $goalId = null)
+    {
+        $payload = $this->buildPayload($row, $encounterId, $goalId);
+        if ($payload === null) {
+            return null;
+        }
 
         return $this->sendFHIRCarePlan($payload);
     }

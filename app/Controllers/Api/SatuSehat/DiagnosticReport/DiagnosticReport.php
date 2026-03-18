@@ -12,7 +12,7 @@ class DiagnosticReport extends DiagnosticReportBase
         parent::__construct(new SatusehatService());
     }
 
-    public function push($row, $encounterId)
+    public function buildPayload($row, $encounterId)
     {
         $orgId = getenv('SATUSEHAT_ORG_ID');
         $reportId = $row['NoTran']; // Unique ID for Report
@@ -34,7 +34,7 @@ class DiagnosticReport extends DiagnosticReportBase
         if (strpos($asalSampel, 'sputum') !== false || strpos($asalSampel, 'dahak') !== false || $kategori === 'MB' || $kategori === 'MIKROBIOLOGI') {
             $categoryCode = "MB";
             $categoryDisplay = "Microbiology";
-             
+
             // Specific check for Sputum/Acid fast stain
             if (strpos($asalSampel, 'sputum') !== false || strpos($asalSampel, 'dahak') !== false) {
                 $loincCode = "11477-7";
@@ -94,7 +94,7 @@ class DiagnosticReport extends DiagnosticReportBase
             "basedOn" => [], // To be populated
             "conclusion" => $row['Kesan'] ?? ''
         ];
-        
+
         // Add Conclusion Code if available
         if (!empty($row['Kesan'])) {
             $kesan = strtolower($row['Kesan']);
@@ -123,27 +123,45 @@ class DiagnosticReport extends DiagnosticReportBase
                 ];
             }
         }
-        
+
         if (!empty($row['SpecimenId'])) {
+            $specRef = $row['SpecimenId'];
+            if (strpos($specRef, 'urn:uuid:') !== 0) {
+                $specRef = "Specimen/" . $specRef;
+            }
             $payload['specimen'][] = [
-                "reference" => "Specimen/" . $row['SpecimenId']
+                "reference" => $specRef
             ];
         }
 
         if (!empty($row['ServiceRequestId'])) {
+            $reqRef = $row['ServiceRequestId'];
+            if (strpos($reqRef, 'urn:uuid:') !== 0) {
+                $reqRef = "ServiceRequest/" . $reqRef;
+            }
             $payload['basedOn'][] = [
-                "reference" => "ServiceRequest/" . $row['ServiceRequestId']
+                "reference" => $reqRef
             ];
         }
 
         if (!empty($row['ObservationIds']) && is_array($row['ObservationIds'])) {
             foreach ($row['ObservationIds'] as $obsId) {
+                $obsRef = $obsId;
+                if (strpos($obsRef, 'urn:uuid:') !== 0) {
+                    $obsRef = "Observation/" . $obsRef;
+                }
                 $payload['result'][] = [
-                    "reference" => "Observation/" . $obsId
+                    "reference" => $obsRef
                 ];
             }
         }
 
+        return $payload;
+    }
+
+    public function push($row, $encounterId)
+    {
+        $payload = $this->buildPayload($row, $encounterId);
         return $this->sendFHIRDiagnosticReport($payload);
     }
 }

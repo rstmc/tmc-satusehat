@@ -6,14 +6,12 @@ use App\Controllers\Api\SatuSehat\Observation\ObservationBase;
 
 class TDSistolik extends ObservationBase
 {
-    public function push($row, $encounterId)
-    { 
-        // Pastikan nilai Sistole ada
+    public function buildPayload($row, $encounterId)
+    {
         if (empty($row['Sistole'])) {
             return null;
         }
 
-        // Format tanggal dan waktu
         $dateOnly = date('Y-m-d', strtotime($row['Regdate']));
         $timeOnly = date('H:i:s', strtotime($row['RegTime']));
         $dateTimeStr = $dateOnly . ' ' . $timeOnly;
@@ -64,6 +62,16 @@ class TDSistolik extends ObservationBase
                 "code" => "mm[Hg]"
             ]
         ];
+
+        return $payload;
+    }
+
+    public function push($row, $encounterId)
+    { 
+        $payload = $this->buildPayload($row, $encounterId);
+        if ($payload === null) {
+            return null;
+        }
 
         return $this->sendFHIRObservation($payload);
     }

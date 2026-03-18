@@ -6,10 +6,10 @@ use App\Controllers\Api\SatuSehat\Immunization\ImmunizationBase;
 
 class ImmunizationPush extends ImmunizationBase
 {
-    public function push($row, $encounterId)
+    public function buildPayload($row, $encounterId)
     {
         if (empty($row['IHSSatuSehat'])) {
-            return ['status' => 'failed', 'message' => 'No IHS SatuSehat'];
+            return null;
         }
 
         $orgId = getenv('SATUSEHAT_ORG_ID');
@@ -133,6 +133,20 @@ class ImmunizationPush extends ImmunizationBase
                 ]
             ]
         ];
+        
+        return $payload;
+    }
+
+    public function push($row, $encounterId)
+    {
+        $payload = $this->buildPayload($row, $encounterId);
+        
+        if ($payload === null) {
+            if (empty($row['IHSSatuSehat'])) {
+                return ['status' => 'failed', 'message' => 'No IHS SatuSehat'];
+            }
+            return null;
+        }
 
         return $this->sendFHIRImmunization($payload);
     }

@@ -12,7 +12,7 @@ class LaboratoriumObservation extends ObservationBase
         parent::__construct(new SatusehatService());
     }
 
-    public function push($row, $encounterId)
+    public function buildPayload($row, $encounterId)
     {
         // $row here is a detail row + header info
         $orgId = getenv('SATUSEHAT_ORG_ID');
@@ -28,7 +28,7 @@ class LaboratoriumObservation extends ObservationBase
         // Using provided code or default.
         $loincCode = $row['LoincCode'] ?? 'Unknown';
         $loincDisplay = $row['NmTarif'] ?? 'Laboratory Test';
-        
+
         // Value
         // Assuming result value is in 'IsiHasil' (from header?) or we need to find it in detail.
         // User didn't provide explicit 'ResultValue' column in DetailBilLab.
@@ -84,21 +84,35 @@ class LaboratoriumObservation extends ObservationBase
             ],
             "valueString" => $valueString
         ];
-        
+
         if (!empty($row['SpecimenId'])) {
+            $specRef = $row['SpecimenId'];
+            if (strpos($specRef, 'urn:uuid:') !== 0) {
+                $specRef = "Specimen/" . $specRef;
+            }
             $payload['specimen'] = [
-                "reference" => "Specimen/" . $row['SpecimenId']
+                "reference" => $specRef
             ];
         }
-        
+
         if (!empty($row['ServiceRequestId'])) {
+            $reqRef = $row['ServiceRequestId'];
+            if (strpos($reqRef, 'urn:uuid:') !== 0) {
+                $reqRef = "ServiceRequest/" . $reqRef;
+            }
             $payload['basedOn'] = [
                 [
-                    "reference" => "ServiceRequest/" . $row['ServiceRequestId']
+                    "reference" => $reqRef
                 ]
             ];
         }
 
+        return $payload;
+    }
+
+    public function push($row, $encounterId)
+    {
+        $payload = $this->buildPayload($row, $encounterId);
         return $this->sendFHIRObservation($payload);
     }
 }

@@ -4,7 +4,7 @@ namespace App\Controllers\Api\SatuSehat\MedicationRequest;
 
 class MedicationRequest extends MedicationRequestBase
 {
-    public function push($row, $encounterId)
+    public function buildPayload($row, $encounterId)
     {
         // Organization ID from environment or config
         $orgId = getenv('SATUSEHAT_ORG_ID');
@@ -38,6 +38,11 @@ class MedicationRequest extends MedicationRequestBase
         }
         $authoredOn = date('c', $authTs);
 
+        $medRef = $row['MedicationId'] ?? '8f299a19-5887-4b8e-90a2-c2c15ecbe1d1';
+        if (strpos($medRef, 'urn:uuid:') !== 0) {
+            $medRef = "Medication/" . $medRef;
+        }
+
         $payload = [
             "resourceType" => "MedicationRequest",
             "identifier" => [
@@ -67,7 +72,7 @@ class MedicationRequest extends MedicationRequestBase
             ],
             "priority" => "routine",
             "medicationReference" => [
-                "reference" => "Medication/" . ($row['MedicationId'] ?? '8f299a19-5887-4b8e-90a2-c2c15ecbe1d1'),
+                "reference" => $medRef,
                 "display" => $row['NamaObat'] ?? 'Obat Anti Tuberculosis / Rifampicin 150 mg / Isoniazid 75 mg / Pyrazinamide 400 mg / Ethambutol 275 mg Kaplet Salut Selaput (KIMIA FARMA)'
             ],
             "subject" => [
@@ -87,8 +92,8 @@ class MedicationRequest extends MedicationRequestBase
                     "coding" => [
                         [
                             "system" => "http://hl7.org/fhir/sid/icd-10",
-                            "code" => $row['ICD10Code'] ?? 'A15.0',
-                            "display" => $row['ICD10Display'] ?? 'Tuberculosis of lung, confirmed by sputum microscopy with or without culture'
+                            "code" => (!empty($row['ICD10Code']) ? $row['ICD10Code'] : 'A15.0'),
+                            "display" => (!empty($row['ICD10Display']) ? $row['ICD10Display'] : 'Tuberculosis of lung, confirmed by sputum microscopy with or without culture')
                         ]
                     ]
                 ]
@@ -98,24 +103,30 @@ class MedicationRequest extends MedicationRequestBase
                     [
                         "system" => "http://terminology.hl7.org/CodeSystem/medicationrequest-course-of-therapy",
                         "code" => "continuous",
-                        "display" => "Continuing long term therapy"
+                        "display" => "Continuous long term therapy"
                     ]
                 ]
             ],
             "dosageInstruction" => [
                 [
                     "sequence" => 1,
-                    "text" => $row['AturanPakai'] ?? '4 tablet per hari',
+                    "text" => $row['Signa'] ?? '1 tablet per hari',
                     "additionalInstruction" => [
                         [
-                            "text" => $row['CatatanMinum'] ?? 'Diminum setiap hari'
+                            "coding" => [
+                                [
+                                    "system" => "http://snomed.info/sct",
+                                    "code" => "418190008",
+                                    "display" => "With or after food"
+                                ]
+                            ]
                         ]
                     ],
-                    "patientInstruction" => $row['InstruksiPasien'] ?? '4 tablet perhari, diminum setiap hari tanpa jeda sampai prose pengobatan berakhir',
+                    "patientInstruction" => "1 tablet per hari, sesudah makan",
                     "timing" => [
                         "repeat" => [
-                            "frequency" => isset($row['Frekuensi']) ? (int)$row['Frekuensi'] : 1,
-                            "period" => isset($row['Periode']) ? (int)$row['Periode'] : 1,
+                            "frequency" => 1,
+                            "period" => 1,
                             "periodUnit" => "d"
                         ]
                     ],
@@ -140,7 +151,7 @@ class MedicationRequest extends MedicationRequestBase
                                 ]
                             ],
                             "doseQuantity" => [
-                                "value" => isset($row['Dosis']) ? (int)$row['Dosis'] : 4,
+                                "value" => (int)($row['Qty'] ?? 1),
                                 "unit" => "TAB",
                                 "system" => "http://terminology.hl7.org/CodeSystem/v3-orderableDrugForm",
                                 "code" => "TAB"
@@ -158,17 +169,17 @@ class MedicationRequest extends MedicationRequestBase
                 ],
                 "validityPeriod" => [
                     "start" => $authoredOn,
-                    "end" => date('c', strtotime(date('Y-m-d\TH:i:sP', $authTs) . ' + 30 days'))
+                    "end" => date('c', $authTs + (30 * 24 * 3600)) // Valid for 30 days
                 ],
                 "numberOfRepeatsAllowed" => 0,
                 "quantity" => [
-                    "value" => isset($row['JumlahObat']) ? (int)$row['JumlahObat'] : 120,
+                    "value" => (int)($row['Qty'] ?? 10),
                     "unit" => "TAB",
                     "system" => "http://terminology.hl7.org/CodeSystem/v3-orderableDrugForm",
                     "code" => "TAB"
                 ],
                 "expectedSupplyDuration" => [
-                    "value" => isset($row['LamaHari']) ? (int)$row['LamaHari'] : 30,
+                    "value" => (int)($row['Duration'] ?? 10),
                     "unit" => "days",
                     "system" => "http://unitsofmeasure.org",
                     "code" => "d"
@@ -179,6 +190,12 @@ class MedicationRequest extends MedicationRequestBase
             ]
         ];
 
+        return $payload;
+    }
+
+    public function push($row, $encounterId)
+    {
+        $payload = $this->buildPayload($row, $encounterId);
         return $this->sendFHIRMedicationRequest($payload);
     }
 }

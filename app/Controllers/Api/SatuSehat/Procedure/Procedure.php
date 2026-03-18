@@ -4,7 +4,7 @@ namespace App\Controllers\Api\SatuSehat\Procedure;
 
 class Procedure extends ProcedureBase
 {
-    public function push($row, $encounterId)
+    public function buildPayload($row, $encounterId)
     {
         $dateOnly = date('Y-m-d', strtotime($row['Regdate'] ?? date('Y-m-d')));
         $timeOnly = date('H:i:s', strtotime($row['RegTime'] ?? date('H:i:s')));
@@ -29,8 +29,8 @@ class Procedure extends ProcedureBase
                 "coding" => [
                     [
                         "system" => "http://hl7.org/fhir/sid/icd-9-cm",
-                        "code" => $row['KdIcd9'] ?? '87.44',
-                        "display" => $row['NmIcd9'] ?? 'Routine chest x-ray, so described'
+                        "code" => (!empty($row['KdIcd9']) ? $row['KdIcd9'] : '87.44'),
+                        "display" => (!empty($row['NmIcd9']) ? $row['NmIcd9'] : 'Routine chest X-ray, so described')
                     ]
                 ]
             ],
@@ -59,8 +59,8 @@ class Procedure extends ProcedureBase
                     "coding" => [
                         [
                             "system" => "http://hl7.org/fhir/sid/icd-10",
-                            "code" => $row['KdIcd'] ?? '',
-                            "display" => $row['NmIcd'] ?? ''
+                            "code" => (!empty($row['KdIcd']) ? $row['KdIcd'] : 'Z01.8'),
+                            "display" => (!empty($row['NmIcd']) ? $row['NmIcd'] : 'Other specified special examinations')
                         ]
                     ]
                 ]
@@ -83,6 +83,12 @@ class Procedure extends ProcedureBase
             ]
         ];
 
+        return $payload;
+    }
+
+    public function push($row, $encounterId)
+    {
+        $payload = $this->buildPayload($row, $encounterId);
         return $this->sendFHIRProcedure($payload);
     }
 }

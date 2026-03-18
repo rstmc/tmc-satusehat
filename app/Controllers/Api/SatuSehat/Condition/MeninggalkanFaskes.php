@@ -4,7 +4,7 @@ namespace App\Controllers\Api\SatuSehat\Condition;
 
 class MeninggalkanFaskes extends ConditionBase
 {
-    public function push($row, $encounterId)
+    public function buildPayload($row, $encounterId)
     {
         $payload = [
             "resourceType" => "Condition",
@@ -46,6 +46,16 @@ class MeninggalkanFaskes extends ConditionBase
                 "display" => "Kunjungan " . $row['Firstname']
             ]
         ];
+
+        return $payload;
+    }
+
+    public function push($row, $encounterId)
+    {
+        $payload = $this->buildPayload($row, $encounterId);
+        if ($payload === null) {
+            return null;
+        }
 
         return $this->sendFHIRCondition($payload);
     }

@@ -4,7 +4,7 @@ namespace App\Controllers\Api\SatuSehat\MedicationDispense;
 
 class MedicationDispense extends MedicationDispenseBase
 {
-    public function push($row, $encounterId, $medRequestId = null)
+    public function buildPayload($row, $encounterId, $medRequestId = null)
     {
         // Organization ID from environment or config
         $orgId = getenv('SATUSEHAT_ORG_ID');
@@ -41,6 +41,16 @@ class MedicationDispense extends MedicationDispenseBase
         $preparedTime = date('c', $ts);
         $handedOverTime = date('c', $ts);
 
+        $medRef = $row['MedicationId'] ?? '';
+        if (strpos($medRef, 'urn:uuid:') !== 0) {
+            $medRef = "Medication/" . $medRef;
+        }
+
+        $reqRef = $medRequestId ?? $row['MedicationRequestId'] ?? '';
+        if (strpos($reqRef, 'urn:uuid:') !== 0) {
+            $reqRef = "MedicationRequest/" . $reqRef;
+        }
+
         $payload = [
             "resourceType" => "MedicationDispense",
             "identifier" => [
@@ -66,7 +76,7 @@ class MedicationDispense extends MedicationDispenseBase
                 ]
             ],
             "medicationReference" => [
-                "reference" => "Medication/" . ($row['MedicationId'] ?? ''),
+                "reference" => $medRef,
                 "display" => $row['NamaObat'] ?? ''
             ],
             "subject" => [
@@ -86,12 +96,12 @@ class MedicationDispense extends MedicationDispenseBase
             ],
             "authorizingPrescription" => [
                 [
-                    "reference" => "MedicationRequest/" . (($medRequestId ?? $row['MedicationRequestId'] ?? ''))
+                    "reference" => $reqRef
                 ]
             ],
             "quantity" => [
                 "system" => "http://terminology.hl7.org/CodeSystem/v3-orderableDrugForm",
-                "code" => $row['Satuan'] ?? 'TAB',
+                "code" => (!empty($row['Satuan']) ? $row['Satuan'] : 'TAB'),
                 "value" => isset($row['Qty']) ? (float)$row['Qty'] : 1
             ],
             "daysSupply" => [
@@ -134,6 +144,12 @@ class MedicationDispense extends MedicationDispenseBase
             ];
         }
 
+        return $payload;
+    }
+
+    public function push($row, $encounterId, $medRequestId = null)
+    {
+        $payload = $this->buildPayload($row, $encounterId, $medRequestId);
         return $this->sendFHIRMedicationDispense($payload);
     }
 }

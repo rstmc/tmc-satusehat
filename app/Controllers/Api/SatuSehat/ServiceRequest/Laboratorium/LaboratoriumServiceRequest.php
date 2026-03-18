@@ -12,11 +12,11 @@ class LaboratoriumServiceRequest extends ServiceRequestBase
         parent::__construct(new SatusehatService());
     }
 
-    public function push($row, $encounterId)
+    public function buildPayload($row, $encounterId)
     {
         // Validate required fields
         if (empty($row['IHSSatuSehat']) || empty($row['KdDocSatuSehat'])) {
-            return ['status' => 'failed', 'message' => 'Missing IHSSatuSehat or KdDocSatuSehat'];
+            return null;
         }
 
         // Format dates
@@ -105,6 +105,16 @@ class LaboratoriumServiceRequest extends ServiceRequestBase
                     "reference" => "Procedure/" . $row['Procedure_StatusPuasa_Paket']
                 ]
             ];
+        }
+
+        return $payload;
+    }
+
+    public function push($row, $encounterId)
+    {
+        $payload = $this->buildPayload($row, $encounterId);
+        if ($payload === null) {
+            return ['status' => 'failed', 'message' => 'Missing required fields'];
         }
 
         return $this->sendFHIRServiceRequest($payload);

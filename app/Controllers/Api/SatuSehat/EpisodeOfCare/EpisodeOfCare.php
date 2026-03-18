@@ -6,7 +6,7 @@ use App\Controllers\Api\SatuSehat\EpisodeOfCare\EpisodeOfCareBase;
 
 class EpisodeOfCare extends EpisodeOfCareBase
 {
-    public function push($row, $encounterId, $keluhanUtamaId)
+    public function buildPayload($row, $encounterId, $keluhanUtamaId = null)
     {
         // IHS SatuSehat is required for the patient reference
         if (empty($row['IHSSatuSehat'])) {
@@ -25,7 +25,7 @@ class EpisodeOfCare extends EpisodeOfCareBase
         
         $startDateTime = strtotime("$regDate $regTime");
         $startDate = date('c', $startDateTime);
-        $endDate = date('c', $startDateTime + 3600); // Assume 1 hour duration if same
+        // $endDate = date('c', $startDateTime + 3600); // Assume 1 hour duration if same
 
         $payload = [
             "resourceType" => "EpisodeOfCare",
@@ -72,10 +72,14 @@ class EpisodeOfCare extends EpisodeOfCareBase
         ];
 
         if (!empty($keluhanUtamaId)) {
+            $conditionRef = $keluhanUtamaId;
+            if (strpos($conditionRef, 'urn:uuid:') !== 0) {
+                $conditionRef = "Condition/" . $conditionRef;
+            }
             $payload["diagnosis"] = [
                 [
                     "condition" => [
-                        "reference" => "Condition/" . $keluhanUtamaId,
+                        "reference" => $conditionRef,
                         "display" => $row['Subjective'] ?? ''
                     ],
                     "role" => [
@@ -90,6 +94,17 @@ class EpisodeOfCare extends EpisodeOfCareBase
                     "rank" => 1
                 ]
             ];
+        }
+
+        return $payload;
+    }
+
+    public function push($row, $encounterId, $keluhanUtamaId = null)
+    {
+        $payload = $this->buildPayload($row, $encounterId, $keluhanUtamaId);
+        
+        if ($payload === null) {
+            return null;
         }
 
         return $this->sendFHIREpisodeOfCare($payload);

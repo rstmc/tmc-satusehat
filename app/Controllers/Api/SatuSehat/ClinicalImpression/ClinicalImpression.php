@@ -6,31 +6,23 @@ use App\Controllers\Api\SatuSehat\ClinicalImpression\ClinicalImpressionBase;
 
 class ClinicalImpression extends ClinicalImpressionBase
 {
-    public function push($row, $encounterId, $keluhanUtamaId = null)
+    public function buildPayload($row, $encounterId, $keluhanUtamaId = null)
     {
-        // Organization ID from environment or config
         $orgId = getenv('SATUSEHAT_ORG_ID');
 
-        // Timestamps from regdate and regtime + 30 mins
         $regDateInput = $row['RegDate'] ?? $row['Regdate'] ?? date('Y-m-d');
         $regTimeInput = $row['RegTime'] ?? $row['Regtime'] ?? date('H:i:s');
-        
-        // Normalize date and time inputs to handle potential datetime strings (e.g. "2026-01-02 00:00:00.000")
         $regDate = date('Y-m-d', strtotime($regDateInput));
         $regTime = date('H:i:s', strtotime($regTimeInput));
-        
         $timestamp = strtotime("$regDate $regTime") + 1800;
         $effectiveDateTime = date('c', $timestamp);
         $date = date('c', $timestamp);
 
-        // Identifier
         $identifierValue = $row['NoPrognosis'] ?? 'Prognosis_' . date('His');
 
-        // Prognosis SNOMED Code
         $prognosisCode = $row['PrognosisCode'] ?? '170968001';
         $prognosisDisplay = $row['PrognosisDisplay'] ?? 'Prognosis good';
 
-        // Prepare investigation items
         $investigationItems = [];
         if (!empty($row['DiagnosticReportId'])) {
             $investigationItems[] = [
@@ -43,7 +35,6 @@ class ClinicalImpression extends ClinicalImpressionBase
             ];
         }
 
-        // Prepare finding items
         $finding = [];
         if (!empty($row['KdIcd'])) {
             $findingItem = [
@@ -66,10 +57,7 @@ class ClinicalImpression extends ClinicalImpressionBase
             $finding[] = $findingItem;
         }
 
-        // Prepare problem list
         $problem = [];
-        // Only add problem if ConditionId is explicitly provided or fall back to default if needed, 
-        // but ensure we don't send "Condition/" with empty ID
         $conditionId = $keluhanUtamaId ?? '';
         if (!empty($conditionId)) {
             $problem[] = [
@@ -117,7 +105,6 @@ class ClinicalImpression extends ClinicalImpressionBase
             ]
         ];
 
-        // Add investigation only if items exist
         if (!empty($investigationItems) || !empty($row['Objective'])) {
             $payload['investigation'] = [
                 [
@@ -127,6 +114,16 @@ class ClinicalImpression extends ClinicalImpressionBase
                     "item" => $investigationItems
                 ]
             ];
+        }
+
+        return $payload;
+    }
+
+    public function push($row, $encounterId, $keluhanUtamaId = null)
+    {
+        $payload = $this->buildPayload($row, $encounterId, $keluhanUtamaId);
+        if ($payload === null) {
+            return null;
         }
 
         return $this->sendFHIRClinicalImpression($payload);

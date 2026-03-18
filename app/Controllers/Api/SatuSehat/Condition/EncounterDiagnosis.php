@@ -4,7 +4,7 @@ namespace App\Controllers\Api\SatuSehat\Condition;
 
 class EncounterDiagnosis extends ConditionBase
 {
-    public function push($row, $encounterId)
+    public function buildPayload($row, $encounterId)
     {
         if (empty($row['KdIcd'])) {
             return null;
@@ -32,6 +32,16 @@ class EncounterDiagnosis extends ConditionBase
             "subject" => ["reference" => "Patient/" . $row['IHSSatuSehat'], "display" => $row['Firstname']],
             "encounter" => ["reference" => "Encounter/" . $encounterId, "display" => "Kunjungan " . $row['Firstname']]
         ];
+
+        return $payload;
+    }
+
+    public function push($row, $encounterId)
+    {
+        $payload = $this->buildPayload($row, $encounterId);
+        if ($payload === null) {
+            return null;
+        }
 
         return $this->sendFHIRCondition($payload);
     }

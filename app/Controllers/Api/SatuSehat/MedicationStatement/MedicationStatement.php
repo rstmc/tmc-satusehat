@@ -4,21 +4,20 @@ namespace App\Controllers\Api\SatuSehat\MedicationStatement;
 
 class MedicationStatement extends MedicationStatementBase
 {
-    public function push($row, $encounterId)
+    public function buildPayload($row, $encounterId)
     {
         // Validation
         if (empty($row['IHSSatuSehat'])) {
-            return ['status' => 'failed', 'message' => 'Missing IHSSatuSehat'];
+            return null;
         }
 
         if (empty($encounterId)) {
-            return ['status' => 'failed', 'message' => 'Missing Encounter ID'];
+            return null;
         }
 
         if (empty($row['KFA'])) {
             // If no KFA, we can't send valid medication info. 
-            // Or we could send a display-only code if allowed, but KFA is preferred.
-            return ['status' => 'skipped', 'message' => 'Missing KFA Code for ' . ($row['NamaObat'] ?? 'Unknown Drug')];
+            return null;
         }
 
         $orgId = getenv('SATUSEHAT_ORG_ID');
@@ -122,6 +121,27 @@ class MedicationStatement extends MedicationStatementBase
                     "periodUnit" => "d" // Assuming per day
                 ]
             ];
+        }
+
+        return $payload;
+    }
+
+    public function push($row, $encounterId)
+    {
+        $payload = $this->buildPayload($row, $encounterId);
+
+        if ($payload === null) {
+            // Re-validate to return specific error messages
+            if (empty($row['IHSSatuSehat'])) {
+                return ['status' => 'failed', 'message' => 'Missing IHSSatuSehat'];
+            }
+            if (empty($encounterId)) {
+                return ['status' => 'failed', 'message' => 'Missing Encounter ID'];
+            }
+            if (empty($row['KFA'])) {
+                return ['status' => 'skipped', 'message' => 'Missing KFA Code for ' . ($row['NamaObat'] ?? 'Unknown Drug')];
+            }
+            return ['status' => 'failed', 'message' => 'Failed to build payload'];
         }
 
         return $this->sendFHIRMedicationStatement($payload);

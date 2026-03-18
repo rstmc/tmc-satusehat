@@ -34,7 +34,10 @@ $routes->group('api', ['namespace' => 'App\Controllers\Api'], function ($routes)
     $routes->get('masterdokter/get-satusehat-kode/(:any)', 'MasterDokter::getSatuSehatKode/$1');
 
     // Satu Sehat Routes
-    $routes->get('satusehat/push-all', 'SatuSehat::pushAll');
+    $routes->get('satusehat/push-all', 'SatuSehat::pushAll');                          // push semua (by ?date=)
+    $routes->get('satusehat/push-regno/(:segment)', 'SatuSehat::pushByRegno/$1');      // push 1 regno
+    $routes->get('satusehat/push-date/(:segment)', 'SatuSehat::pushByDate/$1');        // push by tanggal (path param)
+
 
     // DICOM Routes
     $routes->get('dicom/(:any)', 'DicomController::getDicomByDate/$1');

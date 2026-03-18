@@ -4,7 +4,7 @@ namespace App\Controllers\Api\SatuSehat\Medication;
 
 class Medication extends MedicationBase
 {
-    public function push($row, $encounterId)
+    public function buildPayload($row, $encounterId)
     {
         // Organization ID from environment or config
         $orgId = getenv('SATUSEHAT_ORG_ID');
@@ -27,8 +27,8 @@ class Medication extends MedicationBase
                 "coding" => [
                     [
                         "system" => "http://sys-ids.kemkes.go.id/kfa",
-                        "code" => "93001019",
-                        "display" => "Obat Anti Tuberculosis / Rifampicin 150 mg / Isoniazid 75 mg / Pyrazinamide 400 mg / Ethambutol 275 mg Kaplet Salut Selaput (KIMIA FARMA)"
+                        "code" => (!empty($row['KodeObat']) ? $row['KodeObat'] : "93001019"),
+                        "display" => (!empty($row['NamaObat']) ? $row['NamaObat'] : "Obat Tambahan")
                     ]
                 ]
             ],
@@ -42,104 +42,6 @@ class Medication extends MedicationBase
                         "system" => "http://terminology.kemkes.go.id/CodeSystem/medication-form",
                         "code" => "BS023",
                         "display" => "Kaplet Salut Selaput"
-                    ]
-                ]
-            ],
-            "ingredient" => [
-                [
-                    "itemCodeableConcept" => [
-                        "coding" => [
-                            [
-                                "system" => "http://sys-ids.kemkes.go.id/kfa",
-                                "code" => "91000330",
-                                "display" => "Rifampin"
-                            ]
-                        ]
-                    ],
-                    "isActive" => true,
-                    "strength" => [
-                        "numerator" => [
-                            "value" => 150,
-                            "system" => "http://unitsofmeasure.org",
-                            "code" => "mg"
-                        ],
-                        "denominator" => [
-                            "value" => 1,
-                            "system" => "http://terminology.hl7.org/CodeSystem/v3-orderableDrugForm",
-                            "code" => "TAB"
-                        ]
-                    ]
-                ],
-                [
-                    "itemCodeableConcept" => [
-                        "coding" => [
-                            [
-                                "system" => "http://sys-ids.kemkes.go.id/kfa",
-                                "code" => "91000328",
-                                "display" => "Isoniazid"
-                            ]
-                        ]
-                    ],
-                    "isActive" => true,
-                    "strength" => [
-                        "numerator" => [
-                            "value" => 75,
-                            "system" => "http://unitsofmeasure.org",
-                            "code" => "mg"
-                        ],
-                        "denominator" => [
-                            "value" => 1,
-                            "system" => "http://terminology.hl7.org/CodeSystem/v3-orderableDrugForm",
-                            "code" => "TAB"
-                        ]
-                    ]
-                ],
-                [
-                    "itemCodeableConcept" => [
-                        "coding" => [
-                            [
-                                "system" => "http://sys-ids.kemkes.go.id/kfa",
-                                "code" => "91000329",
-                                "display" => "Pyrazinamide"
-                            ]
-                        ]
-                    ],
-                    "isActive" => true,
-                    "strength" => [
-                        "numerator" => [
-                            "value" => 400,
-                            "system" => "http://unitsofmeasure.org",
-                            "code" => "mg"
-                        ],
-                        "denominator" => [
-                            "value" => 1,
-                            "system" => "http://terminology.hl7.org/CodeSystem/v3-orderableDrugForm",
-                            "code" => "TAB"
-                        ]
-                    ]
-                ],
-                [
-                    "itemCodeableConcept" => [
-                        "coding" => [
-                            [
-                                "system" => "http://sys-ids.kemkes.go.id/kfa",
-                                "code" => "91000288",
-                                "display" => "Ethambutol"
-                            ]
-                        ]
-                    ],
-                    "isActive" => true,
-                    "strength" => [
-                        "numerator" => [
-                            "value" => 275,
-                            "system" => "http://unitsofmeasure.org",
-                            "code" => "mg"
-                        ],
-                        "denominator" => [
-                            "value" => 1,
-                            "system" => "http://terminology.hl7.org/CodeSystem/v3-orderableDrugForm",
-                            "code" => "TAB"
-                        ]
                     ]
                 ]
             ],
@@ -159,6 +61,12 @@ class Medication extends MedicationBase
             ]
         ];
 
+        return $payload;
+    }
+
+    public function push($row, $encounterId)
+    {
+        $payload = $this->buildPayload($row, $encounterId);
         return $this->sendFHIRMedication($payload);
     }
 }

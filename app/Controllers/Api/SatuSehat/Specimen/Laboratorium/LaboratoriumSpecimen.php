@@ -12,7 +12,7 @@ class LaboratoriumSpecimen extends SpecimenBase
         parent::__construct(new SatusehatService());
     }
 
-    public function push($row, $encounterId)
+    public function buildPayload($row, $encounterId)
     {
         $orgId = getenv('SATUSEHAT_ORG_ID');
         $specimenId = $row['NoTran'] . '-SPEC'; // Unique ID for Specimen
@@ -69,6 +69,12 @@ class LaboratoriumSpecimen extends SpecimenBase
             ];
         }
 
+        return $payload;
+    }
+
+    public function push($row, $encounterId)
+    {
+        $payload = $this->buildPayload($row, $encounterId);
         return $this->sendFHIRSpecimen($payload);
     }
 }

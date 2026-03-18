@@ -4,7 +4,7 @@ namespace App\Controllers\Api\SatuSehat\QuestionnaireResponse;
 
 class QuestionnaireResponse extends QuestionnaireResponseBase
 {
-    public function push($row, $encounterId)
+    public function buildPayload($row, $encounterId)
     {
         if (empty($row['IHSSatuSehat'])) {
             return null;
@@ -62,6 +62,17 @@ class QuestionnaireResponse extends QuestionnaireResponseBase
                 ]
             ]
         ];
+
+        return $payload;
+    }
+
+    public function push($row, $encounterId)
+    {
+        $payload = $this->buildPayload($row, $encounterId);
+        
+        if ($payload === null) {
+            return null;
+        }
 
         return $this->sendFHIRQuestionnaireResponse($payload);
     }

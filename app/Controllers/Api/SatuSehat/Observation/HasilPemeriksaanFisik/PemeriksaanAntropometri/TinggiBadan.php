@@ -6,7 +6,7 @@ use App\Controllers\Api\SatuSehat\Observation\ObservationBase;
 
 class TinggiBadan extends ObservationBase
 {
-    public function push($row, $encounterId)
+    public function buildPayload($row, $encounterId)
     {
         // Pastikan nilai Tinggi Badan ada
         if (empty($row['TinggiBadan'])) {
@@ -64,6 +64,16 @@ class TinggiBadan extends ObservationBase
                 "code" => "cm"
             ]
         ];
+
+        return $payload;
+    }
+
+    public function push($row, $encounterId)
+    {
+        $payload = $this->buildPayload($row, $encounterId);
+        if ($payload === null) {
+            return null;
+        }
 
         return $this->sendFHIRObservation($payload);
     }
