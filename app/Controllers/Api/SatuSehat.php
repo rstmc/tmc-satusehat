@@ -1190,8 +1190,10 @@ class SatuSehat extends BaseController
         ];
 
         $apotekModel = new ApotekModel();
-        // Get dispensed drugs/vaccines
         $items = $apotekModel->getDispenseObatByRegno($row['Regno']);
+        if (empty($items)) {
+            $items = $apotekModel->getObatByRegno($row['Regno']);
+        }
 
         $results = [];
         $immController = new ImmunizationPush($this->service);
