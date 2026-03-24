@@ -96,8 +96,7 @@ class SatuSehat extends BaseController
             (new \App\Models\MasterPS())->update($row['Medrec'], ['IHSSatuSehat' => $ihsId]);
             $row['IHSSatuSehat'] = $ihsId;
             return true;
-        }
-        catch (\Exception $e) {
+        } catch (\Exception $e) {
             return 'Gagal fetch IHS: ' . $e->getMessage();
         }
     }
@@ -369,8 +368,7 @@ class SatuSehat extends BaseController
                     // Simpan ID yang sudah ketemu ke database lokal bapak
                     $registerModel = new \App\Models\Register();
                     $registerModel->updateEncounter($row['Regno'], $row['Medrec'], $alreadySentEncounterId);
-                }
-                else if ($alreadySentEncounterId === 'PENDING-SYNC') {
+                } else if ($alreadySentEncounterId === 'PENDING-SYNC') {
                     // Api Kemkes masih mengindeks data yang sudah disubmit secara parsial
                     return [
                         'regno' => $row['Regno'],
@@ -379,8 +377,7 @@ class SatuSehat extends BaseController
                         'message' => 'Sedang di-index oleh Kemkes (Bypass Error 20002).'
                     ];
                 }
-            }
-            catch (\Exception $e) {
+            } catch (\Exception $e) {
             }
         }
 
@@ -428,9 +425,8 @@ class SatuSehat extends BaseController
 
         // ── 4. Encounter masuk bundle sebagai ENTRY PERTAMA ───────────────────
         if ($alreadySentEncounterId) {
-        // Encounter sudah ada → tidak masuk bundle, langsung reference real ID
-        }
-        else {
+            // Encounter sudah ada → tidak masuk bundle, langsung reference real ID
+        } else {
             // Encounter baru → masuk sebagai POST dengan fullUrl = encounterFullUrl
             $entries[] = [
                 'fullUrl' => $encounterFullUrl,
@@ -469,7 +465,7 @@ class SatuSehat extends BaseController
             // Find the entry we just added and set fullUrl
             $lastIdx = count($entries) - 1;
             $entries[$lastIdx]['fullUrl'] = $keluhanUtamaUuid;
-        // Also need to pass this UUID to dependents
+            // Also need to pass this UUID to dependents
         }
 
         // 3. Observations
@@ -561,9 +557,8 @@ class SatuSehat extends BaseController
                 if (($resEoc['total'] ?? 0) > 0) {
                     $hasActiveEoc = true;
                 }
-            }
-            catch (\Exception $e) {
-            // Abaikan jika error, anggap tidak ada
+            } catch (\Exception $e) {
+                // Abaikan jika error, anggap tidak ada
             }
 
             // Jika belum ada yang aktif, tambahkan POST (Create baru) ke dalam bundle
@@ -607,8 +602,7 @@ class SatuSehat extends BaseController
             // Generate UUIDs. Untuk Medication, cek apakah KFA ini sudah digenerate di bundle yang sama
             if (isset($medUuidsByKode[$kodeDeduplikasi])) {
                 $medUuid = $medUuidsByKode[$kodeDeduplikasi];
-            }
-            else {
+            } else {
                 $medUuid = 'urn:uuid:' . $this->generateUuid();
                 $medUuidsByKode[$kodeDeduplikasi] = $medUuid;
 
@@ -888,32 +882,17 @@ class SatuSehat extends BaseController
 
         // 14. MedicationStatement
         $msController = new MedicationStatement($this->service);
-        $candidates = [];
         foreach ($obats as $item) {
-            if (!empty($item['KFA'])) {
-                $candidates[] = $item;
+            if (empty($item['KFA'])) {
+                continue;
             }
-        }
 
-        if (!empty($candidates)) {
-            usort($candidates, static function ($a, $b) {
-                $aKode = (string)($a['KodeObat'] ?? '');
-                $bKode = (string)($b['KodeObat'] ?? '');
-                $cmp = strcmp($aKode, $bKode);
-                if ($cmp !== 0) {
-                    return $cmp;
-                }
-                $aKfa = (string)($a['KFA'] ?? '');
-                $bKfa = (string)($b['KFA'] ?? '');
-                return strcmp($aKfa, $bKfa);
-            });
-            $picked = $candidates[0];
-            $msData = array_merge($row, $picked);
+            $msData = array_merge($row, $item);
 
             if (method_exists($msController, 'buildPayload')) {
                 $msPayload = $msController->buildPayload($msData, $encounterId);
                 if ($msPayload) {
-                    $addEntry($msPayload, ['type' => 'MedicationStatement', 'subtype' => $picked['KodeObat'] ?? 'medication_statement']);
+                    $addEntry($msPayload, ['type' => 'MedicationStatement', 'subtype' => $item['KodeObat'] ?? 'medication_statement']);
                 }
             }
         }
@@ -996,8 +975,7 @@ class SatuSehat extends BaseController
                 'encounter_mode' => $alreadySentEncounterId ? 'existing' : 'new_in_bundle',
                 'bundle_response' => $response,
             ];
-        }
-        catch (\Exception $e) {
+        } catch (\Exception $e) {
             $msg = $e->getMessage();
 
             // Bypass Rule 20002: Kasus di mana bundle gagal ("invalid code") tapi API Kemkes 
