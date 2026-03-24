@@ -17,9 +17,9 @@ class AllergyIntolerance extends AllergyIntoleranceBase
         // RiwayatAlergiOpsi: 1=Obat, 2=Makanan, 3=Lainnya
         $RiwayatAlergiOpsi = $row['RiwayatAlergiOpsi'] ?? '3';
 
-        $category = null;
-        $snomedCode = null;
-        $snomedDisplay = null;
+        $category = 'environment';
+        $snomedCode = '716186003';
+        $snomedDisplay = 'No known allergy';
 
         if ($hasAllergy) {
             $category = 'environment';
@@ -65,9 +65,9 @@ class AllergyIntolerance extends AllergyIntoleranceBase
         $recordedDate = date('c', $timestamp);
 
         if ($hasAllergy) {
-            $allergyText = $row['ReaksiAlergi'] ?? ('Alergi ' . ($category ?? ''));
+            $allergyText = $row['ReaksiAlergi'] ?? ('Alergi ' . $category);
             if (empty($allergyText)) {
-                $allergyText = 'Alergi ' . ($category ?? '');
+                $allergyText = 'Alergi ' . $category;
             }
         } else {
             $allergyText = 'Tidak ada riwayat alergi';
@@ -112,28 +112,21 @@ class AllergyIntolerance extends AllergyIntoleranceBase
             "recorder" => [
                 "reference" => "Practitioner/" . ($row['KdDocSatuSehat'] ?? 'N10000001'),
                 "display" => $row['NmDoc'] ?? ''
+            ],
+            "category" => [
+                $category
+            ],
+            "code" => [
+                "coding" => [
+                    [
+                        "system" => "http://snomed.info/sct",
+                        "code" => $snomedCode,
+                        "display" => $snomedDisplay
+                    ]
+                ],
+                "text" => $allergyText
             ]
         ];
-
-        if ($category !== null) {
-            $payload['category'] = [$category];
-        }
-
-        $code = [
-            "text" => $allergyText
-        ];
-
-        if ($snomedCode !== null) {
-            $code['coding'] = [
-                [
-                    "system" => "http://snomed.info/sct",
-                    "code" => $snomedCode,
-                    "display" => $snomedDisplay
-                ]
-            ];
-        }
-
-        $payload['code'] = $code;
 
         // Optional: Add Reaction if available and meaningful
         if (!empty($row['ReaksiAlergi'])) {
