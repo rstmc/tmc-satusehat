@@ -151,7 +151,7 @@ class MedicationRequest extends MedicationRequestBase
                                 ]
                             ],
                             "doseQuantity" => [
-                                "value" => (int)($row['Qty'] ?? 1),
+                                "value" => (int)(!empty($row['Qty']) ? $row['Qty'] : 1),
                                 "unit" => "TAB",
                                 "system" => "http://terminology.hl7.org/CodeSystem/v3-orderableDrugForm",
                                 "code" => "TAB"
@@ -173,13 +173,13 @@ class MedicationRequest extends MedicationRequestBase
                 ],
                 "numberOfRepeatsAllowed" => 0,
                 "quantity" => [
-                    "value" => (int)($row['Qty'] ?? 10),
+                    "value" => (int)(!empty($row['Qty']) ? $row['Qty'] : 10),
                     "unit" => "TAB",
                     "system" => "http://terminology.hl7.org/CodeSystem/v3-orderableDrugForm",
                     "code" => "TAB"
                 ],
                 "expectedSupplyDuration" => [
-                    "value" => (int)($row['Duration'] ?? 10),
+                    "value" => (int)(!empty($row['Duration']) ? $row['Duration'] : 10),
                     "unit" => "days",
                     "system" => "http://unitsofmeasure.org",
                     "code" => "d"

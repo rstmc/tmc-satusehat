@@ -12,32 +12,33 @@ class AllergyIntolerance extends AllergyIntoleranceBase
         // Logic Mapping
         // RiwayatAlergi: 1=Tidak Ada, 2=Ada
         $riwayatAlergi = $row['RiwayatAlergi'] ?? '1';
-        
-        if ($riwayatAlergi == '1') {
-            return null; // Return null to indicate no payload
-        }
+        $hasAllergy = $riwayatAlergi === '2';
 
         // RiwayatAlergiOpsi: 1=Obat, 2=Makanan, 3=Lainnya
         $RiwayatAlergiOpsi = $row['RiwayatAlergiOpsi'] ?? '3';
-        
-        $category = 'environment'; // Default
-        $snomedCode = '419199007'; // Allergy to substance (disorder) - generic
-        $snomedDisplay = 'Allergy to substance';
-        
-        if ($RiwayatAlergiOpsi == '1') {
-            $category = 'medication';
-            // Example generic code for drug allergy if specific not available
-            $snomedCode = '416098002'; 
-            $snomedDisplay = 'Drug allergy';
-        } elseif ($RiwayatAlergiOpsi == '2') {
-            $category = 'food';
-            // Example generic code for food allergy
-            $snomedCode = '414285001';
-            $snomedDisplay = 'Food allergy';
-        } elseif ($RiwayatAlergiOpsi == '3') {
-            $category = 'environment'; // Or 'biologic' depending on context
+
+        $category = null;
+        $snomedCode = null;
+        $snomedDisplay = null;
+
+        if ($hasAllergy) {
+            $category = 'environment';
             $snomedCode = '419199007';
             $snomedDisplay = 'Allergy to substance';
+
+            if ($RiwayatAlergiOpsi == '1') {
+                $category = 'medication';
+                $snomedCode = '416098002';
+                $snomedDisplay = 'Drug allergy';
+            } elseif ($RiwayatAlergiOpsi == '2') {
+                $category = 'food';
+                $snomedCode = '414285001';
+                $snomedDisplay = 'Food allergy';
+            } elseif ($RiwayatAlergiOpsi == '3') {
+                $category = 'environment';
+                $snomedCode = '419199007';
+                $snomedDisplay = 'Allergy to substance';
+            }
         }
 
         // Identifier
@@ -45,27 +46,31 @@ class AllergyIntolerance extends AllergyIntoleranceBase
         // Since we don't have a specific allergy ID, we might generate one or use a placeholder
         // Using Regno + '-allergy-' + index or similar might be better if multiple allergies
         $regNo = $row['RegNo'] ?? $row['Regno'] ?? 'Unknown';
-        $identifierValue = $regNo . '-allergy-' . time(); 
-        
+        $identifierValue = $regNo . '-allergy-' . time();
+
         // Recorded Date
         $regDate = $row['RegDate'] ?? $row['Regdate'] ?? date('Y-m-d');
         $regTime = $row['RegTime'] ?? $row['Regtime'] ?? date('H:i:s');
-        
+
         // Basic validation
         if (empty($regDate) || $regDate === '0000-00-00') {
             $regDate = date('Y-m-d');
         }
-        
+
         $timestamp = strtotime("$regDate $regTime");
         if ($timestamp === false || $timestamp < 0) {
             $timestamp = time();
         }
-        
+
         $recordedDate = date('c', $timestamp);
 
-        $allergyText = $row['ReaksiAlergi'] ?? ('Alergi ' . $category);
-        if (empty($allergyText)) {
-            $allergyText = 'Alergi ' . $category;
+        if ($hasAllergy) {
+            $allergyText = $row['ReaksiAlergi'] ?? ('Alergi ' . ($category ?? ''));
+            if (empty($allergyText)) {
+                $allergyText = 'Alergi ' . ($category ?? '');
+            }
+        } else {
+            $allergyText = 'Tidak ada riwayat alergi';
         }
 
         $payload = [
@@ -95,19 +100,6 @@ class AllergyIntolerance extends AllergyIntoleranceBase
                     ]
                 ]
             ],
-            "category" => [
-                $category
-            ],
-            "code" => [
-                "coding" => [
-                    [
-                        "system" => "http://snomed.info/sct",
-                        "code" => $snomedCode,
-                        "display" => $snomedDisplay
-                    ]
-                ],
-                "text" => $allergyText
-            ],
             "patient" => [
                 "reference" => "Patient/" . ($row['IHSSatuSehat'] ?? ''),
                 "display" => $row['Firstname'] ?? ''
@@ -122,10 +114,30 @@ class AllergyIntolerance extends AllergyIntoleranceBase
                 "display" => $row['NmDoc'] ?? ''
             ]
         ];
-        
+
+        if ($category !== null) {
+            $payload['category'] = [$category];
+        }
+
+        $code = [
+            "text" => $allergyText
+        ];
+
+        if ($snomedCode !== null) {
+            $code['coding'] = [
+                [
+                    "system" => "http://snomed.info/sct",
+                    "code" => $snomedCode,
+                    "display" => $snomedDisplay
+                ]
+            ];
+        }
+
+        $payload['code'] = $code;
+
         // Optional: Add Reaction if available and meaningful
         if (!empty($row['ReaksiAlergi'])) {
-             $payload['reaction'] = [
+            $payload['reaction'] = [
                 [
                     "manifestation" => [
                         [
@@ -154,14 +166,14 @@ class AllergyIntolerance extends AllergyIntoleranceBase
     public function push($row, $encounterId)
     {
         $payload = $this->buildPayload($row, $encounterId);
-        
+
         if ($payload === null) {
-             // Replicate original check logic for consistency
-             $riwayatAlergi = $row['RiwayatAlergi'] ?? '1';
-             if ($riwayatAlergi == '1') {
+            // Replicate original check logic for consistency
+            $riwayatAlergi = $row['RiwayatAlergi'] ?? '1';
+            if ($riwayatAlergi == '1') {
                 return ['status' => 'skipped', 'message' => 'Tidak ada riwayat alergi'];
-             }
-             return null;
+            }
+            return null;
         }
 
         return $this->sendFHIRAllergyIntolerance($payload);

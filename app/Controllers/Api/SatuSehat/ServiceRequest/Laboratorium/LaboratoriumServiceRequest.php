@@ -31,8 +31,8 @@ class LaboratoriumServiceRequest extends ServiceRequestBase
         $orgId = getenv('SATUSEHAT_ORG_ID');
         $labSrId = $row['NoTran']; // Use NoTran as ID
 
-        $loincCode = $row['LoincCode'] ?? '18719-5'; // Chemistry studies (generic example) or 26436-6 (Laboratory studies)
-        $loincDisplay = $row['LoincDisplay'] ?? 'Laboratory studies';
+        $loincCode = !empty($row['LoincCode']) ? $row['LoincCode'] : '18719-5'; // Chemistry studies (generic example) or 26436-6 (Laboratory studies)
+        $loincDisplay = !empty($row['LoincDisplay']) ? $row['LoincDisplay'] : 'Laboratory studies';
         $textDisplay = $row['NmTarif'] ?? '';
         $reasonText = 'Paket Pemeriksaan ' . $row['NmTarif'] ?? '';
         $noteText = $row['CatatanHasil'] ?? '';

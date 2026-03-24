@@ -234,8 +234,8 @@ class SatuSehat extends BaseController
                                         'coding' => [
                                             [
                                                 'system' => 'http://terminology.kemkes.go.id/CodeSystem/locationServiceClass-Outpatient',
-                                                'code' => $row['LocationServiceClassCode'] ?? 'reguler',
-                                                'display' => $row['LocationServiceClassDisplay'] ?? 'Kelas Reguler',
+                                                'code' => (!empty($row['LocationServiceClassCode']) ? $row['LocationServiceClassCode'] : 'reguler'),
+                                                'display' => (!empty($row['LocationServiceClassDisplay']) ? $row['LocationServiceClassDisplay'] : 'Kelas Reguler'),
                                             ]
                                         ]
                                     ]
@@ -246,8 +246,8 @@ class SatuSehat extends BaseController
                                         'coding' => [
                                             [
                                                 'system' => 'http://terminology.kemkes.go.id/CodeSystem/locationUpgradeClass',
-                                                'code' => $row['LocationUpgradeClassCode'] ?? 'kelas-tetap',
-                                                'display' => $row['LocationUpgradeClassDisplay'] ?? 'Kelas Tetap Perawatan',
+                                                'code' => (!empty($row['LocationUpgradeClassCode']) ? $row['LocationUpgradeClassCode'] : 'kelas-tetap'),
+                                                'display' => (!empty($row['LocationUpgradeClassDisplay']) ? $row['LocationUpgradeClassDisplay'] : 'Kelas Tetap Perawatan'),
                                             ]
                                         ]
                                     ]

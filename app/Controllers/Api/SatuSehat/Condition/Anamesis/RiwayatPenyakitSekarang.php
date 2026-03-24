@@ -36,7 +36,7 @@ class RiwayatPenyakitSekarang extends ConditionBase
             ],
             "code" => [
                 "coding" => [
-                    ["system" => "http://snomed.info/sct", "code" => $row['SnomedCodeRPS'] ?? 'unknown', "display" => $row['SnomedDisplayRPS'] ?? 'Unknown']
+                    ["system" => "http://snomed.info/sct", "code" => (!empty($row['SnomedCodeRPS']) ? $row['SnomedCodeRPS'] : '404684003'), "display" => (!empty($row['SnomedDisplayRPS']) ? $row['SnomedDisplayRPS'] : 'Clinical finding')]
                 ]
             ],
             "subject" => ["reference" => "Patient/" . $row['IHSSatuSehat'], "display" => $row['Firstname']],

@@ -33,7 +33,7 @@ class RiwayatPenyakitTerdahulu extends ConditionBase
             ],
             "code" => [
                 "coding" => [
-                    ["system" => "http://snomed.info/sct", "code" => $row['SnomedCodeRPT'] ?? 'unknown', "display" => $row['SnomedDisplayRPT'] ?? 'Unknown']
+                    ["system" => "http://snomed.info/sct", "code" => (!empty($row['SnomedCodeRPT']) ? $row['SnomedCodeRPT'] : '404684003'), "display" => (!empty($row['SnomedDisplayRPT']) ? $row['SnomedDisplayRPT'] : 'Clinical finding')]
                 ]
             ],
             "subject" => ["reference" => "Patient/" . $row['IHSSatuSehat'], "display" => $row['Firstname']],
