@@ -62,9 +62,13 @@ class LaboratoriumSpecimen extends SpecimenBase
 
         // If ServiceRequest ID is available, link it
         if (!empty($row['ServiceRequestId'])) {
+            $reqRef = $row['ServiceRequestId'];
+            if (strpos($reqRef, 'urn:uuid:') !== 0) {
+                $reqRef = "ServiceRequest/" . $reqRef;
+            }
             $payload['request'] = [
                 [
-                    "reference" => "ServiceRequest/" . $row['ServiceRequestId']
+                    "reference" => $reqRef
                 ]
             ];
         }

@@ -10,7 +10,12 @@ class MedicationRequest extends MedicationRequestBase
         $orgId = getenv('SATUSEHAT_ORG_ID');
 
         $identifierValue = $row['NoResep'] ?? '123456788';
-        $identifierItemValue = $identifierValue . '-1'; // Assuming item index 1 for simplicity, needs logic for multiple items
+        $urutan = $row['Urutan'] ?? $row['KodeObat'] ?? '1';
+        if (strpos($urutan, '-') !== false) {
+            $parts = explode('-', $urutan);
+            $urutan = $parts[0];
+        }
+        $identifierItemValue = $identifierValue . '-' . $urutan;
 
         $dateInput = $row['TglResep'] ?? $row['RegDate'] ?? $row['Regdate'] ?? date('Y-m-d');
         $timeInput = $row['RegTime'] ?? $row['Jam'] ?? date('H:i:s');
@@ -42,6 +47,32 @@ class MedicationRequest extends MedicationRequestBase
         if (strpos($medRef, 'urn:uuid:') !== 0) {
             $medRef = "Medication/" . $medRef;
         }
+
+        $satuanRaw = $row['Satuan'] ?? $row['SatuanObat'] ?? 'TAB';
+        $sUpper = strtoupper(trim($satuanRaw));
+        $mapping = [
+            'TABLET' => 'TAB',
+            'TAB' => 'TAB',
+            'CAPSULE' => 'CAP',
+            'CAPSUL' => 'CAP',
+            'KAPSUL' => 'CAP',
+            'CAP' => 'CAP',
+            'BOTOL' => 'ORALSOL',
+            'BOTTLE' => 'ORALSOL',
+            'BOT' => 'ORALSOL',
+            'AMPUL' => 'TAB',
+            'AMP' => 'TAB',
+            'VIAL' => 'TAB',
+            'BOX' => 'TAB',
+            'PC' => 'TAB',
+            'PCS' => 'TAB',
+            'PIECE' => 'TAB',
+            'SACHET' => 'TAB',
+            'SUPP' => 'SUPP',
+            'SYRUP' => 'SYR',
+            'SIRUP' => 'SYR'
+        ];
+        $drugFormCode = $mapping[$sUpper] ?? 'TAB';
 
         $payload = [
             "resourceType" => "MedicationRequest",
@@ -152,9 +183,9 @@ class MedicationRequest extends MedicationRequestBase
                             ],
                             "doseQuantity" => [
                                 "value" => (int)(!empty($row['Qty']) ? $row['Qty'] : 1),
-                                "unit" => "TAB",
+                                "unit" => $drugFormCode,
                                 "system" => "http://terminology.hl7.org/CodeSystem/v3-orderableDrugForm",
-                                "code" => "TAB"
+                                "code" => $drugFormCode
                             ]
                         ]
                     ]
@@ -174,9 +205,9 @@ class MedicationRequest extends MedicationRequestBase
                 "numberOfRepeatsAllowed" => 0,
                 "quantity" => [
                     "value" => (int)(!empty($row['Qty']) ? $row['Qty'] : 10),
-                    "unit" => "TAB",
+                    "unit" => $drugFormCode,
                     "system" => "http://terminology.hl7.org/CodeSystem/v3-orderableDrugForm",
-                    "code" => "TAB"
+                    "code" => $drugFormCode
                 ],
                 "expectedSupplyDuration" => [
                     "value" => (int)(!empty($row['Duration']) ? $row['Duration'] : 10),

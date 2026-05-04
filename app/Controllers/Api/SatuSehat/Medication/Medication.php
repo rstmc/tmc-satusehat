@@ -27,7 +27,7 @@ class Medication extends MedicationBase
                 "coding" => [
                     [
                         "system" => "http://sys-ids.kemkes.go.id/kfa",
-                        "code" => (!empty($row['KodeObat']) ? $row['KodeObat'] : "93001019"),
+                        "code" => (!empty($row['KFA']) ? $row['KFA'] : (!empty($row['KodeObat']) ? explode('-', $row['KodeObat'])[0] : "93001019")),
                         "display" => (!empty($row['NamaObat']) ? $row['NamaObat'] : "Obat Tambahan")
                     ]
                 ]

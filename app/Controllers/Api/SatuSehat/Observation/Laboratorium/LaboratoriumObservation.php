@@ -26,8 +26,20 @@ class LaboratoriumObservation extends ObservationBase
         // LOINC Code Mapping
         // Ideally this should come from DB or a mapping file.
         // Using provided code or default.
-        $loincCode = $row['LoincCode'] ?? 'Unknown';
+        $simrsCode = $row['KdPemeriksaan'] ?? '';
+        $mapped = \App\Controllers\Api\SatuSehat\LabMapping::getMapping($simrsCode);
+
+        $loincCode = (!empty($row['LoincCode']) && $row['LoincCode'] !== 'Unknown') ? $row['LoincCode'] : '11502-2';
         $loincDisplay = $row['NmTarif'] ?? 'Laboratory Test';
+
+        if ($mapped) {
+            if (!empty($mapped['loinc'])) {
+                $loincCode = $mapped['loinc'];
+            }
+            if (!empty($mapped['name'])) {
+                $loincDisplay = $mapped['name'];
+            }
+        }
 
         // Value
         // Assuming result value is in 'IsiHasil' (from header?) or we need to find it in detail.

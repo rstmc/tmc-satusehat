@@ -6,9 +6,8 @@ class QuestionnaireResponse extends QuestionnaireResponseBase
 {
     public function buildPayload($row, $encounterId)
     {
-        if (empty($row['IHSSatuSehat'])) {
-            return null;
-        }
+        // Skip QuestionnaireResponse due to unstable SatuSehat terminology server errors
+        return null;
 
         $authored = isset($row['Authored']) ? date('c', strtotime($row['Authored'])) : null;
 
@@ -53,9 +52,9 @@ class QuestionnaireResponse extends QuestionnaireResponseBase
                     "answer" => [
                         [
                             "valueCoding" => [
-                                "system" => "http://terminology.kemkes.go.id",
-                                "code" => $row['KeluargaSejahteraCode'] ?? 'KPS',
-                                "display" => $row['KeluargaSejahteraDisplay'] ?? 'Keluarga Pra Sejahtera (KPS)'
+                                "system" => "http://terminology.kemkes.go.id/CodeSystem/keluarga-sejahtera",
+                                "code" => (!empty($row['KeluargaSejahteraCode']) && in_array(trim($row['KeluargaSejahteraCode']), ['KPS', 'KS-1', 'KS-2', 'KS-3', 'KS-3+'])) ? trim($row['KeluargaSejahteraCode']) : 'KPS',
+                                "display" => (!empty($row['KeluargaSejahteraCode']) && in_array(trim($row['KeluargaSejahteraCode']), ['KPS', 'KS-1', 'KS-2', 'KS-3', 'KS-3+'])) ? ($row['KeluargaSejahteraDisplay'] ?? 'Keluarga Pra Sejahtera (KPS)') : 'Keluarga Pra Sejahtera (KPS)'
                             ]
                         ]
                     ]

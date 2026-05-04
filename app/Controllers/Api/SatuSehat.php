@@ -118,7 +118,7 @@ class SatuSehat extends BaseController
             '05' => ['code' => '408472002', 'display' => 'Obstetrics and gynecology service'],
             '07' => ['code' => '408478003', 'display' => 'Pediatric service'],
             '08' => ['code' => '408465003', 'display' => 'Cardiology service'],
-            '09' => ['code' => '408469000', 'display' => 'Neurology service'],
+            '09' => ['code' => '394591006', 'display' => 'Neurology'],
             '10' => ['code' => '408470005', 'display' => 'Otolaryngology service'],
             '11' => ['code' => '408475004', 'display' => 'Urology service'],
             '12' => ['code' => '408467006', 'display' => 'Dermatology service'],
@@ -131,13 +131,13 @@ class SatuSehat extends BaseController
             '20' => ['code' => '408466002', 'display' => 'Anesthesiology service'],
             '21' => ['code' => '408455002', 'display' => 'Radiology service'],
             '30' => ['code' => '408478007', 'display' => 'Emergency medical service'],
-            '31' => ['code' => '408457005', 'display' => 'Renal dialysis service'],
+            '31' => ['code' => '419192003', 'display' => 'Internal medicine'],
             '32' => ['code' => '722164001', 'display' => 'Vascular surgery service'],
             '33' => ['code' => '408476003', 'display' => 'Oral and maxillofacial surgery service'],
             '35' => ['code' => '419192003', 'display' => 'Internal medicine'],
             '36' => ['code' => '408465003', 'display' => 'Cardiology service'],
             '37' => ['code' => '408464004', 'display' => 'Ophthalmology service'],
-            '38' => ['code' => '408469000', 'display' => 'Neurology service'],
+            '38' => ['code' => '394591006', 'display' => 'Neurology'],
             '39' => ['code' => '408472002', 'display' => 'Obstetrics and gynecology service'],
             '40' => ['code' => '408478003', 'display' => 'Pediatric service'],
             '41' => ['code' => '394609007', 'display' => 'Surgical service'],
@@ -161,6 +161,12 @@ class SatuSehat extends BaseController
         $kdPoli = $row['KdPoli'] ?? '';
         $stCode = $serviceTypeMap[$kdPoli]['code'] ?? '419192003';
         $stDisplay = $serviceTypeMap[$kdPoli]['display'] ?? 'Internal medicine';
+
+        if (in_array($stCode, ['408457005', '408478007', '408469000'])) {
+            $stCode = '419192003';
+            $stDisplay = 'Internal medicine';
+        }
+
         $isEmer = ($kdPoli === '30');
 
         return [

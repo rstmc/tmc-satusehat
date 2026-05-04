@@ -10,8 +10,12 @@ class MedicationDispense extends MedicationDispenseBase
         $orgId = getenv('SATUSEHAT_ORG_ID');
 
         $identifierValue = $row['NoResep'] ?? '123456788';
-        // Use a unique suffix if available, or default
-        $identifierItemValue = $identifierValue . '-' . ($row['Urutan'] ?? '1');
+        $urutan = $row['Urutan'] ?? $row['KodeObat'] ?? '1';
+        if (strpos($urutan, '-') !== false) {
+            $parts = explode('-', $urutan);
+            $urutan = $parts[0];
+        }
+        $identifierItemValue = $identifierValue . '-' . $urutan;
 
         // Timestamps
         $dateInput = $row['TglResep'] ?? $row['RegDate'] ?? $row['Regdate'] ?? date('Y-m-d');
@@ -49,6 +53,37 @@ class MedicationDispense extends MedicationDispenseBase
         $reqRef = $medRequestId ?? $row['MedicationRequestId'] ?? '';
         if (strpos($reqRef, 'urn:uuid:') !== 0) {
             $reqRef = "MedicationRequest/" . $reqRef;
+        }
+
+        $satuanRaw = $row['Satuan'] ?? $row['SatuanObat'] ?? 'TAB';
+        $sUpper = strtoupper(trim($satuanRaw));
+        $mapping = [
+            'TABLET' => 'TAB',
+            'TAB' => 'TAB',
+            'CAPSULE' => 'CAP',
+            'CAPSUL' => 'CAP',
+            'KAPSUL' => 'CAP',
+            'CAP' => 'CAP',
+            'BOTOL' => 'ORALSOL',
+            'BOTTLE' => 'ORALSOL',
+            'BOT' => 'ORALSOL',
+            'AMPUL' => 'TAB',
+            'AMP' => 'TAB',
+            'VIAL' => 'TAB',
+            'BOX' => 'TAB',
+            'PC' => 'TAB',
+            'PCS' => 'TAB',
+            'PIECE' => 'TAB',
+            'SACHET' => 'TAB',
+            'SUPP' => 'SUPP',
+            'SYRUP' => 'SYR',
+            'SIRUP' => 'SYR'
+        ];
+        $drugFormCode = $mapping[$sUpper] ?? 'TAB';
+
+        $daysSupply = 1;
+        if (isset($row['JumlahHari']) && is_numeric($row['JumlahHari']) && (int)$row['JumlahHari'] > 0) {
+            $daysSupply = (int)$row['JumlahHari'];
         }
 
         $payload = [
@@ -101,11 +136,11 @@ class MedicationDispense extends MedicationDispenseBase
             ],
             "quantity" => [
                 "system" => "http://terminology.hl7.org/CodeSystem/v3-orderableDrugForm",
-                "code" => (!empty($row['Satuan']) ? $row['Satuan'] : 'TAB'),
+                "code" => $drugFormCode,
                 "value" => isset($row['Qty']) ? (float)$row['Qty'] : 1
             ],
             "daysSupply" => [
-                "value" => isset($row['JumlahHari']) ? (int)$row['JumlahHari'] : 1,
+                "value" => $daysSupply,
                 "unit" => "Day",
                 "system" => "http://unitsofmeasure.org",
                 "code" => "d"

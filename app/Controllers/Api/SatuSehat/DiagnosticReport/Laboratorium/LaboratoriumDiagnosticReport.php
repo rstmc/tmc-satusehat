@@ -119,21 +119,32 @@ class LaboratoriumDiagnosticReport extends DiagnosticReportBase
         }
 
         if (!empty($row['SpecimenId'])) {
+            $specRef = $row['SpecimenId'];
+            if (strpos($specRef, 'urn:uuid:') !== 0) {
+                $specRef = "Specimen/" . $specRef;
+            }
             $payload['specimen'][] = [
-                "reference" => "Specimen/" . $row['SpecimenId']
+                "reference" => $specRef
             ];
         }
 
         if (!empty($row['ServiceRequestId'])) {
+            $reqRef = $row['ServiceRequestId'];
+            if (strpos($reqRef, 'urn:uuid:') !== 0) {
+                $reqRef = "ServiceRequest/" . $reqRef;
+            }
             $payload['basedOn'][] = [
-                "reference" => "ServiceRequest/" . $row['ServiceRequestId']
+                "reference" => $reqRef
             ];
         }
 
         if (!empty($row['ObservationIds']) && is_array($row['ObservationIds'])) {
             foreach ($row['ObservationIds'] as $obsId) {
+                if (strpos($obsId, 'urn:uuid:') !== 0) {
+                    $obsId = "Observation/" . $obsId;
+                }
                 $payload['result'][] = [
-                    "reference" => "Observation/" . $obsId
+                    "reference" => $obsId
                 ];
             }
         }
