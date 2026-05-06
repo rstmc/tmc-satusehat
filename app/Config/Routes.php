@@ -51,6 +51,9 @@ $routes->group('api', ['namespace' => 'App\Controllers\Api'], function ($routes)
     $routes->get('dokterfoto/list', 'DokterFoto::index');
     $routes->get('dokterfoto/list-dokter', 'DokterFoto::listDokter');
 
+    // PSRI Routes
+    $routes->post('psri/get-all', 'PsriController::getAllPsri');
+
     // Public (no auth required)
     $routes->post('login', 'Login::index');
 
