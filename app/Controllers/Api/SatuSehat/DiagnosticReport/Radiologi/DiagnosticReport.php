@@ -74,15 +74,13 @@ class DiagnosticReport extends DiagnosticReportBase
                     "code" => $mapping['loinc'],
                     "display" => $mapping['name']
                 ];
-            }
-            if (!empty($mapping['snomed'])) {
+            } elseif (!empty($mapping['snomed'])) {
                 $payload['code']['coding'][] = [
                     "system" => "http://snomed.info/sct",
                     "code" => $mapping['snomed'],
                     "display" => $mapping['name']
                 ];
-            }
-            if (!empty($mapping['xcode'])) {
+            } elseif (!empty($mapping['xcode'])) {
                 $payload['code']['coding'][] = [
                     "system" => "http://terminology.kemkes.go.id/CodeSystem/kptl",
                     "code" => $mapping['xcode'],
