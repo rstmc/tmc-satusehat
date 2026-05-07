@@ -42,6 +42,15 @@ class Register extends Model
     }
 
     /**
+     * Dapatkan data record lengkap berdasarkan regno.
+     */
+    public function getDataByRegno($regno)
+    {
+        $data = $this->getEncounterDataByRegno($regno);
+        return !empty($data) ? $data[0] : null;
+    }
+
+    /**
      * Base SQL yang dipakai bersama oleh getEncounterData dan getEncounterDataByRegno.
      */
     private function _encounterBaseSql(): string

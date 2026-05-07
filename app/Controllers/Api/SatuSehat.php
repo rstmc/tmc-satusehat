@@ -65,8 +65,6 @@ class SatuSehat extends BaseController
     public function hitEncounterWithIhs()
     {
         $regno = $this->request->getPost('regno');
-        $medrec = $this->request->getPost('medrec');
-        $nik = $this->request->getPost('nik');
 
         if (empty($regno)) {
             return $this->response->setJSON(['status' => 'error', 'message' => 'Regno is required'])->setStatusCode(400);
@@ -76,23 +74,7 @@ class SatuSehat extends BaseController
         $row = $registerModel->getDataByRegno($regno);
 
         if (!$row) {
-             // If not found in Register, check if we can build a minimal row from input
-             if (empty($medrec) || empty($nik)) {
-                 return $this->response->setJSON(['status' => 'error', 'message' => 'Data not found for regno, and medrec/nik missing'])->setStatusCode(404);
-             }
-             $row = [
-                 'Regno' => $regno,
-                 'Medrec' => $medrec,
-                 'NoIden' => $nik,
-                 'Firstname' => $this->request->getPost('name'),
-                 'Regdate' => $this->request->getPost('regdate') ?? date('Y-m-d'),
-                 'RegTime' => $this->request->getPost('regtime') ?? date('H:i:s'),
-                 'KdPoli' => $this->request->getPost('kd_poli'),
-                 'KdDocSatuSehat' => $this->request->getPost('kd_doc_satusehat'),
-                 'NmDoc' => $this->request->getPost('nm_doc'),
-                 'IdRuanganKemenkes' => $this->request->getPost('id_ruangan_kemenkes'),
-                 'NmRuanganKemenkes' => $this->request->getPost('nm_ruangan_kemenkes'),
-             ];
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Data not found for regno: ' . $regno])->setStatusCode(404);
         }
 
         // 1. Resolve IHS
