@@ -34,7 +34,6 @@ class Register extends Model
         $sql = $this->_encounterBaseSql() . "
                  WHERE
                      A.Regno = ?
-                     AND C.KdDocSatuSehat IS NOT NULL
                  GROUP BY
                      A.Regno";
 

@@ -76,6 +76,10 @@ class SatuSehat extends BaseController
         if (!$row) {
             return $this->response->setJSON(['status' => 'error', 'message' => 'Data not found for regno: ' . $regno])->setStatusCode(404);
         }
+        if($row['KdDocSatuSehat'] == '')
+        {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Data KdDocSatuSehat tidak ditemukan for regno: ' . $regno])->setStatusCode(404);
+        }
 
         // 1. Resolve IHS
         $ihsRes = $this->resolveIhsId($row);
