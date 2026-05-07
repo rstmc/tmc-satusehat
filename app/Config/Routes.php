@@ -65,10 +65,6 @@ $routes->group('api', ['namespace' => 'App\Controllers\Api'], function ($routes)
 
     // PSRI Routes
     $routes->post('psri/get-all', 'PsriController::getAllPsri');
-<<<<<<< HEAD
-    
-=======
->>>>>>> c812d9bc811c092362b6d1d019c303cc1da7aaba
 
     // Public (no auth required)
     $routes->post('login', 'Login::index');
