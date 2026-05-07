@@ -14,7 +14,8 @@ class RadiologiSqlsrvModel extends Model
             FROM
             (
                 SELECT a.Regno, a.NoTran, a.Regdate, a.Medrec, a.Firstname,
-                       c.IHSSatuSehat, d.KdDoc, d.kdDocSatuSehat, d.NmDoc,a.Hasil,e.NmTarif,e.Kdtarif
+                       c.IHSSatuSehat, d.KdDoc, d.kdDocSatuSehat, d.NmDoc, a.Hasil, e.NmTarif, e.Kdtarif,
+                       a.AccessionNumber AS ACSN, a.Modality
                 FROM HasilRadiologi a
                 LEFT JOIN MasterPs c ON a.Medrec = c.Medrec
                 LEFT JOIN FtDokter d ON a.KdDoc = d.KdDoc
@@ -24,7 +25,7 @@ class RadiologiSqlsrvModel extends Model
             ) P
             INNER JOIN
             (
-                SELECT x.Regno, x.Regdate, x.Medrec, x.EcounterSatuSehat,
+                SELECT x.Regno, x.Regdate, x.RegTime, x.Medrec, x.EcounterSatuSehat,
                        y.KdDocSatuSehat AS KdDPJP,
                        y.NmDoc AS NmDPJP,
                        x.KdIcd,
@@ -36,6 +37,19 @@ class RadiologiSqlsrvModel extends Model
                   AND x.KdIcd IS NOT NULL
             ) Q ON P.Regno = Q.Regno
         ";
+    }
+
+    public function getByRegnoNotran($regno, $notran)
+    {
+        $sql = "
+            SELECT
+                P.*, Q.EcounterSatuSehat, Q.KdIcd, Q.DIAGNOSA,
+                Q.KdDPJP, Q.NmDPJP, Q.RegTime
+            {$this->baseQuery()}
+            WHERE P.Regno = ? AND P.NoTran = ?
+        ";
+
+        return $this->db->query($sql, [$regno, $notran])->getRowArray();
     }
 
     public function getRadiologi($startDate, $endDate, $limit, $offset)
@@ -54,7 +68,7 @@ class RadiologiSqlsrvModel extends Model
         $sql = "
             SELECT
                 P.*, Q.EcounterSatuSehat, Q.KdIcd, Q.DIAGNOSA,
-                Q.KdDPJP, Q.NmDPJP
+                Q.KdDPJP, Q.NmDPJP, Q.RegTime
             {$this->baseQuery()}
             $whereSql
             ORDER BY P.Regdate ASC

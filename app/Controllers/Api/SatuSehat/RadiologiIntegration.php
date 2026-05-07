@@ -82,4 +82,70 @@ class RadiologiIntegration extends BaseController
         $res = $controller->push($data, $encounterId);
         return $this->response->setJSON($res);
     }
+
+    public function pushRadiologyComplete()
+    {
+        $regno = $this->request->getPost('regno');
+        $notran = $this->request->getPost('notran');
+
+        if (!$regno || !$notran) {
+            return $this->response->setJSON([
+                'status' => 'error',
+                'message' => 'Regno and NoTran are required.'
+            ])->setStatusCode(400);
+        }
+
+        $model = new \App\Models\RadiologiSqlsrvModel();
+        $row = $model->getByRegnoNotran($regno, $notran);
+
+        if (!$row) {
+            return $this->response->setJSON([
+                'status' => 'error',
+                'message' => 'Data radiology tidak ditemukan atau mapping belum lengkap.'
+            ])->setStatusCode(404);
+        }
+
+        // Map field names for sub-controllers
+        $row['KDDETAIL'] = $row['Kdtarif'];
+        $row['NmTindakan'] = $row['NmTarif'];
+
+        // Use modality from POST if provided, otherwise fallback to database value
+        $postModality = $this->request->getPost('modality');
+        if ($postModality) {
+            $row['Modality'] = $postModality;
+        }
+        
+        $encounterId = $row['EcounterSatuSehat'];
+        $results = [];
+
+        // 1. ServiceRequest
+        $srController = new ServiceRequest($this->service);
+        $srRes = $srController->push($row, $encounterId);
+        $results['service_request'] = $srRes;
+
+        if (isset($srRes['id'])) {
+            $row['ServiceRequestId'] = $srRes['id'];
+        }
+
+        // 2. Observation (Result)
+        $obsController = new RadiologiObservation();
+        $obsRes = $obsController->push($row, $encounterId);
+        $results['observation'] = $obsRes;
+
+        if (isset($obsRes['id'])) {
+            $row['ObservationIds'] = [$obsRes['id']];
+        }
+
+        // 3. DiagnosticReport
+        $drController = new DiagnosticReport();
+        $drRes = $drController->push($row, $encounterId);
+        $results['diagnostic_report'] = $drRes;
+
+        $isSuccess = isset($srRes['id']) && isset($obsRes['id']) && isset($drRes['id']);
+
+        return $this->response->setJSON([
+            'status' => $isSuccess ? 'success' : 'partial',
+            'results' => $results
+        ]);
+    }
 }

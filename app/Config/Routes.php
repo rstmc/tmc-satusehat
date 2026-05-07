@@ -48,6 +48,7 @@ $routes->group('api', ['namespace' => 'App\Controllers\Api'], function ($routes)
         $routes->get('imaging-study/search', 'RadiologiIntegration::searchImagingStudy');
         $routes->post('observation-result', 'RadiologiIntegration::pushObservationResult');
         $routes->post('diagnostic-report', 'RadiologiIntegration::pushDiagnosticReport');
+        $routes->post('push-complete', 'RadiologiIntegration::pushRadiologyComplete');
     });
 
 
