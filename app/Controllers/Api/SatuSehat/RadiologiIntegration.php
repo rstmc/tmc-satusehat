@@ -106,8 +106,13 @@ class RadiologiIntegration extends BaseController
         }
 
         // Map field names for sub-controllers
-        $row['KDDETAIL'] = $row['KDDetail'] ?? '';
+        $row['KDDETAIL'] = $row['KDDetail'] ?? $row['Kdtarif'];
         $row['NmTindakan'] = $row['NmTarif'];
+
+        // Fallback for doctor if KdDocSatuSehat is missing
+        if (empty($row['KdDocSatuSehat'])) {
+            $row['KdDocSatuSehat'] = $row['KdDPJP'] ?? '';
+        }
 
         // Use modality from POST if provided, otherwise fallback to database value
         $postModality = $this->request->getPost('modality');
@@ -119,8 +124,12 @@ class RadiologiIntegration extends BaseController
         $results = [];
 
         // 1. ServiceRequest
-        $srController = new ServiceRequest($this->service);
-        $srRes = $srController->push($row, $encounterId);
+        if (!empty($row['SS_ServiceRequest_ID'])) {
+            $srRes = ['status' => 'success', 'id' => $row['SS_ServiceRequest_ID']];
+        } else {
+            $srController = new ServiceRequest($this->service);
+            $srRes = $srController->push($row, $encounterId);
+        }
         $results['service_request'] = $srRes;
 
         if (isset($srRes['id'])) {
@@ -128,8 +137,12 @@ class RadiologiIntegration extends BaseController
         }
 
         // 2. Observation (Result)
-        $obsController = new RadiologiObservation();
-        $obsRes = $obsController->push($row, $encounterId);
+        if (!empty($row['SS_Observation_ID'])) {
+            $obsRes = ['status' => 'success', 'id' => $row['SS_Observation_ID']];
+        } else {
+            $obsController = new RadiologiObservation();
+            $obsRes = $obsController->push($row, $encounterId);
+        }
         $results['observation'] = $obsRes;
 
         if (isset($obsRes['id'])) {
@@ -137,8 +150,12 @@ class RadiologiIntegration extends BaseController
         }
 
         // 3. DiagnosticReport
-        $drController = new DiagnosticReport();
-        $drRes = $drController->push($row, $encounterId);
+        if (!empty($row['SS_DiagnosticReport_ID'])) {
+            $drRes = ['status' => 'success', 'id' => $row['SS_DiagnosticReport_ID']];
+        } else {
+            $drController = new DiagnosticReport();
+            $drRes = $drController->push($row, $encounterId);
+        }
         $results['diagnostic_report'] = $drRes;
 
         $isSuccess = isset($srRes['id']) && isset($obsRes['id']) && isset($drRes['id']);
