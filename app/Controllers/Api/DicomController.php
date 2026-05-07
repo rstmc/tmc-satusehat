@@ -43,6 +43,22 @@ class DicomController extends ResourceController
 
                 $studyDate = $studyDetail->MainDicomTags->StudyDate ?? null;
                 log_message('debug', "Study ID: $studyId | StudyDate: $studyDate");
+                $series='';
+                // ambil series pertama
+                if (!empty($studyDetail->Series[0])) {
+
+                    $seriesId = $studyDetail->Series[0];
+
+                    $seriesUrl = $this->orthancUrl . "series/5311b4a9-9815952a-79eac604-2249815c-acc8e19c";
+
+                    $seriesResponse = $client->request('GET', $seriesUrl, [
+                        'auth' => [$username, $password]
+                    ]);
+
+                    $series = json_decode($seriesResponse->getBody(), true);
+
+                    $modality = $series['MainDicomTags']['Modality'] ?? '';
+                }
 
                 // ✅ Perbandingan dengan format sama (YYYYmmdd)
                 if ($studyDate === $startDateFormatted) {
@@ -68,15 +84,19 @@ class DicomController extends ResourceController
              }
 
 
-                    $result[] = [
-                        'PatientID'        => $patientData->PatientID ?? 'Unknown',
-                        'PatientName'      => $patientData->PatientName ?? 'Unknown',
-                        'PatientBirthDate' => $patientData->PatientBirthDate ?? 'Unknown',
-                        'PatientSex'       => $patientData->PatientSex ?? 'Unknown',
-                        'StudyDate'        => $studyDate,
-                        'StudyDescription' => $studyDetail->MainDicomTags->StudyDescription ?? 'Unknown',
-                        'AccessionNumber'  => $studyDetail->MainDicomTags->AccessionNumber ?? 'Unknown',
-                    ];
+                $result[] = [
+                    'patientData'        => $patientData,
+                    'studyDetail'        => $studyDetail,
+                    'series'            => $series,
+                    'PatientID'        => $patientData->PatientID ?? 'Unknown',
+                    'PatientName'      => $patientData->PatientName ?? 'Unknown',
+                    'PatientBirthDate' => $patientData->PatientBirthDate ?? 'Unknown',
+                    'PatientSex'       => $patientData->PatientSex ?? 'Unknown',
+                    'StudyDate'        => $studyDate,
+                    'StudyDescription' => $studyDetail->MainDicomTags->StudyDescription ?? 'Unknown',
+                    'AccessionNumber'  => $studyDetail->MainDicomTags->AccessionNumber ?? 'Unknown',
+                    'Modality'  => $modality,
+                ];
                 }
             }
 
