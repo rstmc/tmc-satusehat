@@ -44,12 +44,13 @@ class DicomController extends ResourceController
                 $studyDate = $studyDetail->MainDicomTags->StudyDate ?? null;
                 log_message('debug', "Study ID: $studyId | StudyDate: $studyDate");
                 $series='';
+                $modality='';
                 // ambil series pertama
                 if (!empty($studyDetail->Series[0])) {
 
                     $seriesId = $studyDetail->Series[0];
 
-                    $seriesUrl = $this->orthancUrl . "series/5311b4a9-9815952a-79eac604-2249815c-acc8e19c";
+                    $seriesUrl = $this->orthancUrl . "series/$seriesId";
 
                     $seriesResponse = $client->request('GET', $seriesUrl, [
                         'auth' => [$username, $password]
