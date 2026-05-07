@@ -62,6 +62,87 @@ class SatuSehat extends BaseController
     }
 
 
+    public function hitEncounterWithIhs()
+    {
+        $regno = $this->request->getPost('regno');
+        $medrec = $this->request->getPost('medrec');
+        $nik = $this->request->getPost('nik');
+
+        if (empty($regno)) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Regno is required'])->setStatusCode(400);
+        }
+
+        $registerModel = new Register();
+        $row = $registerModel->getDataByRegno($regno);
+
+        if (!$row) {
+             // If not found in Register, check if we can build a minimal row from input
+             if (empty($medrec) || empty($nik)) {
+                 return $this->response->setJSON(['status' => 'error', 'message' => 'Data not found for regno, and medrec/nik missing'])->setStatusCode(404);
+             }
+             $row = [
+                 'Regno' => $regno,
+                 'Medrec' => $medrec,
+                 'NoIden' => $nik,
+                 'Firstname' => $this->request->getPost('name'),
+                 'Regdate' => $this->request->getPost('regdate') ?? date('Y-m-d'),
+                 'RegTime' => $this->request->getPost('regtime') ?? date('H:i:s'),
+                 'KdPoli' => $this->request->getPost('kd_poli'),
+                 'KdDocSatuSehat' => $this->request->getPost('kd_doc_satusehat'),
+                 'NmDoc' => $this->request->getPost('nm_doc'),
+                 'IdRuanganKemenkes' => $this->request->getPost('id_ruangan_kemenkes'),
+                 'NmRuanganKemenkes' => $this->request->getPost('nm_ruangan_kemenkes'),
+             ];
+        }
+
+        // 1. Resolve IHS
+        $ihsRes = $this->resolveIhsId($row);
+        if ($ihsRes !== true) {
+            return $this->response->setJSON(['status' => 'error', 'message' => $ihsRes])->setStatusCode(500);
+        }
+
+        // 2. Check for existing Encounter
+        $encounterId = $row['EcounterSatuSehat'] ?? null;
+        if (!$encounterId) {
+            // Search on Kemkes
+            try {
+                $encRes = $this->service->get('Encounter', [
+                    'subject' => $row['IHSSatuSehat'],
+                    'identifier' => 'http://sys-ids.kemkes.go.id/encounter/' . getenv('SATUSEHAT_ORG_ID') . '|' . $regno
+                ]);
+
+                if (isset($encRes['entry']) && count($encRes['entry']) > 0) {
+                    $encounterId = $encRes['entry'][0]['resource']['id'];
+                }
+            } catch (\Exception $e) {
+                // Ignore search error
+            }
+        }
+
+        // 3. Create Encounter if still missing
+        if (!$encounterId) {
+            try {
+                $payload = $this->buildEncounterPayload($row);
+                $res = $this->service->post('Encounter', $payload);
+                if (isset($res['id'])) {
+                    $encounterId = $res['id'];
+                    // Save to local DB
+                    $registerModel->updateEncounter($regno, $row['Medrec'], $encounterId);
+                } else {
+                    return $this->response->setJSON(['status' => 'error', 'message' => 'Failed to create Encounter', 'detail' => $res])->setStatusCode(500);
+                }
+            } catch (\Exception $e) {
+                return $this->response->setJSON(['status' => 'error', 'message' => 'Encounter creation error: ' . $e->getMessage()])->setStatusCode(500);
+            }
+        }
+
+        return $this->response->setJSON([
+            'status' => 'success',
+            'ihs_id' => $row['IHSSatuSehat'],
+            'encounter_id' => $encounterId
+        ]);
+    }
+
     /**
      * Fetch IHS ID dari SatuSehat berdasarkan NIK, simpan ke DB & update $row.
      * Return true jika berhasil, false/error string jika gagal.

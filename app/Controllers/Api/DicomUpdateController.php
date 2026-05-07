@@ -7,7 +7,7 @@ use CodeIgniter\HTTP\ResponseInterface;
 
 class DicomUpdateController extends ResourceController
 {
-    private $orthancUrl = 'http://192.168.106.89:8042/';
+    private $orthancUrl = 'http://192.168.105.34:8042/';
     private $username   = 'orthanc';
     private $password   = 'orthanc';
 
