@@ -15,7 +15,8 @@ class RadiologiSqlsrvModel extends Model
             (
                 SELECT a.Regno, a.NoTran, a.Regdate, a.Medrec, a.Firstname,
                        c.IHSSatuSehat, d.KdDoc, d.kdDocSatuSehat AS KdDocSatuSehat, d.NmDoc, a.Hasil, e.NmTarif, e.Kdtarif,
-                       a.AccessionNumber AS ACSN, a.Modality, f.KDDetail
+                       a.AccessionNumber AS ACSN, a.Modality, f.KDDetail,
+                       a.SS_Status, a.SS_ServiceRequest_ID, a.SS_Observation_ID, a.SS_DiagnosticReport_ID
                 FROM HasilRadiologi a
                 LEFT JOIN MasterPs c ON a.Medrec = c.Medrec
                 LEFT JOIN FtDokter d ON a.KdDoc = d.KdDoc
