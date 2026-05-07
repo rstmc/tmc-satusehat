@@ -106,7 +106,7 @@ class RadiologiIntegration extends BaseController
         }
 
         // Map field names for sub-controllers
-        $row['KDDETAIL'] = $row['Kdtarif'];
+        $row['KDDETAIL'] = $row['KDDetail'] ?? '';
         $row['NmTindakan'] = $row['NmTarif'];
 
         // Use modality from POST if provided, otherwise fallback to database value
