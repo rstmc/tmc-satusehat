@@ -7,7 +7,7 @@ use CodeIgniter\HTTP\ResponseInterface;
 
 class DicomController extends ResourceController
 {
-    private $orthancUrl = 'http://192.168.105.34:8042/';
+    private $orthancUrl = 'http://192.168.105.34:8042/' ;
 
     public function getDicomByDate($date)
     {
