@@ -1,12 +1,12 @@
 <?php
 
-namespace App\Controllers\Api\SatuSehat\DiagnosticReport\Radiologi;
+namespace App\Controllers\Api\SatuSehat\Observation\Radiologi;
 
-use App\Controllers\Api\SatuSehat\DiagnosticReport\DiagnosticReportBase;
+use App\Controllers\Api\SatuSehat\Observation\ObservationBase;
 use App\Services\SatusehatService;
 use App\Controllers\Api\SatuSehat\RadiologiMapping;
 
-class DiagnosticReport extends DiagnosticReportBase
+class RadiologiObservation extends ObservationBase
 {
     public function __construct()
     {
@@ -32,21 +32,18 @@ class DiagnosticReport extends DiagnosticReportBase
         }
 
         $orgId = getenv('SATUSEHAT_ORG_ID');
-        $reportId = $row['NoTran'] ?? uniqid();
+        $identifierValue = "O-" . ($row['NoTran'] ?? uniqid());
 
         $dateOnly = date('Y-m-d', strtotime($row['Regdate'] ?? date('Y-m-d')));
         $timeOnly = date('H:i:s', strtotime($row['RegTime'] ?? date('H:i:s')));
-        $dateTimeStr = $dateOnly . ' ' . $timeOnly;
-        $effectiveDateTime = date('c', strtotime($dateTimeStr));
-        $issued = $effectiveDateTime;
+        $effectiveDateTime = date('c', strtotime($dateOnly . ' ' . $timeOnly));
 
         $payload = [
-            "resourceType" => "DiagnosticReport",
+            "resourceType" => "Observation",
             "identifier" => [
                 [
-                    "system" => "http://sys-ids.kemkes.go.id/diagnostic/" . $orgId . "/rad",
-                    "use" => "official",
-                    "value" => $reportId
+                    "system" => "http://sys-ids.kemkes.go.id/observation/" . $orgId,
+                    "value" => $identifierValue
                 ]
             ],
             "status" => "final",
@@ -54,9 +51,9 @@ class DiagnosticReport extends DiagnosticReportBase
                 [
                     "coding" => [
                         [
-                            "system" => "http://terminology.hl7.org/CodeSystem/v2-0074",
-                            "code" => "RAD",
-                            "display" => "Radiology"
+                            "system" => "http://terminology.hl7.org/CodeSystem/observation-category",
+                            "code" => "imaging",
+                            "display" => "Imaging"
                         ]
                     ]
                 ]
@@ -92,58 +89,36 @@ class DiagnosticReport extends DiagnosticReportBase
         }
 
         $payload["subject"] = [
-            "reference" => "Patient/" . $row['IHSSatuSehat']
+            "reference" => "Patient/" . $row['IHSSatuSehat'],
+            "display" => $row['Firstname'] ?? ''
         ];
         $payload["encounter"] = [
             "reference" => "Encounter/" . $encounterId
         ];
         $payload["effectiveDateTime"] = $effectiveDateTime;
-        $payload["issued"] = $issued;
+        $payload["issued"] = $effectiveDateTime;
         $payload["performer"] = [
             [
-                "reference" => "Practitioner/" . ($row['PerformerRadiologi'] ?? '10012572188'),
-                "display" => $row['PerformerName'] ?? 'Dokter Radiologist'
-            ],
-            [
-                "reference" => "Organization/" . $orgId
+                "reference" => "Practitioner/" . ($row['kdDocSatuSehatRad'] ?? '10012572188'),
+                "display" => $row['NmDocRad'] ?? 'Dokter Radiologist'
             ]
         ];
-        $payload["result"] = [];
+        $payload["valueString"] = $row['Hasil'] ?? '';
         $payload["basedOn"] = [];
-        $payload["imagingStudy"] = [];
-        $payload["conclusion"] = $row['Kesan'] ?? '';
+        $payload["derivedFrom"] = [];
 
-        if (!empty($row['ImagingStudyId'])) {
-            $payload['imagingStudy'][] = [
-                "reference" => "ImagingStudy/" . $row['ImagingStudyId']
-            ];
-        }
-
-        if (!empty($row['ServiceRequest_Rad'])) {
-            $payload['basedOn'][] = [
-                "reference" => "ServiceRequest/" . $row['ServiceRequest_Rad']
-            ];
-        } elseif (!empty($row['ServiceRequestId'])) {
+        if (!empty($row['ServiceRequestId'])) {
             $payload['basedOn'][] = [
                 "reference" => "ServiceRequest/" . $row['ServiceRequestId']
             ];
         }
 
-        if (!empty($row['ObservationIds']) && is_array($row['ObservationIds'])) {
-            foreach ($row['ObservationIds'] as $obsId) {
-                if (!empty($obsId)) {
-                    $payload['result'][] = [
-                        "reference" => "Observation/" . $obsId
-                    ];
-                }
-            }
-        } elseif (!empty($row['Observation_Rad'])) {
-            $payload['result'][] = [
-                "reference" => "Observation/" . $row['Observation_Rad']
+        if (!empty($row['ImagingStudyId'])) {
+            $payload['derivedFrom'][] = [
+                "reference" => "ImagingStudy/" . $row['ImagingStudyId']
             ];
         }
 
-        return $this->sendFHIRDiagnosticReport($payload);
+        return $this->sendFHIRObservation($payload);
     }
 }
-

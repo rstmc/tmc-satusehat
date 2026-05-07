@@ -6,7 +6,11 @@ use CodeIgniter\Model;
 
 class PsriM extends Model
 {
+<<<<<<< HEAD
     protected $DBGroup = 'oracle';
+=======
+    protected $DBGroup = 'default';
+>>>>>>> c812d9bc811c092362b6d1d019c303cc1da7aaba
 
     public function getAllPsri($tanggal)
     {

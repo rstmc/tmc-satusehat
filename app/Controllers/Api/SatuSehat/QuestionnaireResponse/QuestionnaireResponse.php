@@ -6,8 +6,6 @@ class QuestionnaireResponse extends QuestionnaireResponseBase
 {
     public function buildPayload($row, $encounterId)
     {
-        // Skip QuestionnaireResponse due to unstable SatuSehat terminology server errors
-        return null;
 
         $authored = isset($row['Authored']) ? date('c', strtotime($row['Authored'])) : null;
 
@@ -26,6 +24,17 @@ class QuestionnaireResponse extends QuestionnaireResponseBase
             }
             $authored = date('c', $timestamp);
         }
+
+        $ksMapping = [
+            'KPS'   => ['code' => '1', 'display' => 'Pra Sejahtera'],
+            'KS-1'  => ['code' => '2', 'display' => 'Sejahtera I'],
+            'KS-2'  => ['code' => '3', 'display' => 'Sejahtera II'],
+            'KS-3'  => ['code' => '4', 'display' => 'Sejahtera III'],
+            'KS-3+' => ['code' => '5', 'display' => 'Sejahtera III Plus'],
+        ];
+
+        $ksInput = trim($row['KeluargaSejahteraCode'] ?? 'KPS');
+        $ksData = $ksMapping[$ksInput] ?? $ksMapping['KPS'];
 
         $payload = [
             "resourceType" => "QuestionnaireResponse",
@@ -53,8 +62,8 @@ class QuestionnaireResponse extends QuestionnaireResponseBase
                         [
                             "valueCoding" => [
                                 "system" => "http://terminology.kemkes.go.id/CodeSystem/keluarga-sejahtera",
-                                "code" => (!empty($row['KeluargaSejahteraCode']) && in_array(trim($row['KeluargaSejahteraCode']), ['KPS', 'KS-1', 'KS-2', 'KS-3', 'KS-3+'])) ? trim($row['KeluargaSejahteraCode']) : 'KPS',
-                                "display" => (!empty($row['KeluargaSejahteraCode']) && in_array(trim($row['KeluargaSejahteraCode']), ['KPS', 'KS-1', 'KS-2', 'KS-3', 'KS-3+'])) ? ($row['KeluargaSejahteraDisplay'] ?? 'Keluarga Pra Sejahtera (KPS)') : 'Keluarga Pra Sejahtera (KPS)'
+                                "code" => $ksData['code'],
+                                "display" => $ksData['display']
                             ]
                         ]
                     ]

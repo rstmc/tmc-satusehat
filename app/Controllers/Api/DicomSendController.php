@@ -6,7 +6,7 @@ use CodeIgniter\RESTful\ResourceController;
 
 class DicomSendController extends ResourceController
 {
-    private $orthancUrl = 'http://192.168.106.89:8042/';
+    private $orthancUrl = 'http://192.168.105.34:8042/' ;
     private $auth;
 
     // Nama modality sesuai orthanc.json

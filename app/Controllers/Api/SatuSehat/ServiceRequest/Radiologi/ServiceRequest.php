@@ -3,6 +3,7 @@
 namespace App\Controllers\Api\SatuSehat\ServiceRequest\Radiologi;
 
 use App\Controllers\Api\SatuSehat\ServiceRequest\ServiceRequestBase;
+use App\Controllers\Api\SatuSehat\RadiologiMapping;
 
 class ServiceRequest extends ServiceRequestBase
 {
@@ -10,6 +11,15 @@ class ServiceRequest extends ServiceRequestBase
     {
         if (empty($row['IHSSatuSehat'])) {
             return null;
+        }
+
+        $mapping = RadiologiMapping::getMapping($row['KDDETAIL'] ?? ($row['ID'] ?? ''));
+
+        if (!$mapping) {
+            return [
+                'status' => 'error',
+                'message' => 'Mapping Radiologi tidak ditemukan untuk ID: ' . ($row['KDDETAIL'] ?? ($row['ID'] ?? '')) . '. Silahkan hubungi IT.'
+            ];
         }
 
         $dateOnly = date('Y-m-d', strtotime($row['Regdate'] ?? date('Y-m-d')));
@@ -22,8 +32,9 @@ class ServiceRequest extends ServiceRequestBase
         $serviceRequestId = $row['ServiceRequestId'] ?? ($row['NOTRAN'] ?? uniqid());
         $acsn = $row['ACSN'] ?? '';
 
-        $aeTitle = 'XR0001';
-        $kfaCode = $row['KFA_Code'] ?? '36572-6';
+        $modality = $row['Modality'] ?? 'DX';
+        $aeTitle = $row['AE_Title'] ?? null;
+        $kfaCode = $mapping['kfa'] ?? ($row['KFA_KONTRAS'] ?? null);
 
         $payload = [
             "resourceType" => "ServiceRequest",
@@ -61,79 +72,100 @@ class ServiceRequest extends ServiceRequestBase
                 ]
             ],
             "code" => [
+                "coding" => [],
+                "text" => $mapping['name'] ?? ($row['NmTindakan'] ?? 'Pemeriksaan Radiologi')
+            ],
+        ];
+
+        if ($mapping) {
+            if (!empty($mapping['loinc'])) {
+                $payload['code']['coding'][] = [
+                    "system" => "http://loinc.org",
+                    "code" => $mapping['loinc'],
+                    "display" => $mapping['name']
+                ];
+            }
+            if (!empty($mapping['snomed'])) {
+                $payload['code']['coding'][] = [
+                    "system" => "http://snomed.info/sct",
+                    "code" => $mapping['snomed'],
+                    "display" => $mapping['name']
+                ];
+            }
+            if (!empty($mapping['xcode'])) {
+                $payload['code']['coding'][] = [
+                    "system" => "http://terminology.kemkes.go.id/CodeSystem/kptl",
+                    "code" => $mapping['xcode'],
+                    "display" => $mapping['name']
+                ];
+            }
+        }
+
+        $payload['orderDetail'] = [
+            [
                 "coding" => [
                     [
-                        "system" => "http://loinc.org",
-                        "code" => "36572-6",
-                        "display" => "XR thorax AP"
-                    ],
-                    // [
-                    //     "system" => "http://terminology.kemkes.go.id/CodeSystem/kptl",
-                    //     "code" => "31243.NP001.AP005",
-                    //     "display" => "Radiografi Thorax 1 proyeksi (AP/PA/Lateral/Top)"
-                    // ]
-                ],
-                "text" => "Pemeriksaan Thorax AP/PA"
-            ],
-            "orderDetail" => [
-                [
-                    "coding" => [
-                        [
-                            "system" => "http://dicom.nema.org/resources/ontology/DCM",
-                            "code" => "DX"
-                        ]
-                    ],
-                    "text" => "Modality Code: DX"
-                ],
-                [
-                    "coding" => [
-                        [
-                            "system" => "http://sys-ids.kemkes.go.id/ae-title",
-                            "display" => $aeTitle
-                        ]
+                        "system" => "http://dicom.nema.org/resources/ontology/DCM",
+                        "code" => $modality
                     ]
                 ],
-                // [
-                //     "coding" => [
-                //         [
-                //             "system" => "http://sys-ids.kemkes.go.id/kfa",
-                //             "code" => $kfaCode,
-                //             "display" => "Barium Sulfate"
-                //         ]
-                //     ]
-                // ]
-            ],
-            "subject" => [
-                "reference" => "Patient/" . $row['IHSSatuSehat']
-            ],
-            "encounter" => [
-                "reference" => "Encounter/" . $encounterId
-            ],
-            "occurrenceDateTime" => $occurrenceDateTime,
-            "authoredOn" => $authoredOn,
-            "requester" => [
-                "reference" => "Practitioner/" . ($row['KdDocSatuSehat'] ?? ''),
-                "display" => $row['NmDoc'] ?? ''
-            ],
-            "performer" => [
-                [
-                    "reference" => "Practitioner/" . ($row['kdDocSatuSehatRad'] ?? ''),
-                    "display" => $row['NmDocRad'] ?? ''
-                ]
-            ],
-            "reasonCode" => [
-                [
-                    "coding" => [
-                        [
-                            "system" => "http://hl7.org/fhir/sid/icd-10",
-                            "code" => (!empty($row['kdIcd']) ? $row['kdIcd'] : 'Z01.8'),
-                            "display" => (!empty($row['NmIcd']) ? $row['NmIcd'] : 'Other specified special examinations')
-                        ]
-                    ]
-                ]
-            ],
-            "supportingInfo" => []
+                "text" => "Modality Code: " . $modality
+            ]
         ];
+
+        if ($aeTitle) {
+            $payload['orderDetail'][] = [
+                "coding" => [
+                    [
+                        "system" => "http://sys-ids.kemkes.go.id/ae-title",
+                        "display" => $aeTitle
+                    ]
+                ]
+            ];
+        }
+
+        if ($kfaCode) {
+            $payload['orderDetail'][] = [
+                "coding" => [
+                    [
+                        "system" => "http://sys-ids.kemkes.go.id/kfa",
+                        "code" => $kfaCode,
+                        "display" => $mapping['kfa_display'] ?? "Contrast Media"
+                    ]
+                ]
+            ];
+        }
+
+        $payload['subject'] = [
+            "reference" => "Patient/" . $row['IHSSatuSehat']
+        ];
+        $payload['encounter'] = [
+            "reference" => "Encounter/" . $encounterId
+        ];
+        $payload['occurrenceDateTime'] = $occurrenceDateTime;
+        $payload['authoredOn'] = $authoredOn;
+        $payload['requester'] = [
+            "reference" => "Practitioner/" . ($row['KdDocSatuSehat'] ?? ''),
+            "display" => $row['NmDoc'] ?? ''
+        ];
+        $payload['performer'] = [
+            [
+                "reference" => "Practitioner/" . ($row['kdDocSatuSehatRad'] ?? '10012572188'),
+                "display" => $row['NmDocRad'] ?? 'Dokter Radiologist'
+            ]
+        ];
+        $payload['reasonCode'] = [
+            [
+                "coding" => [
+                    [
+                        "system" => "http://hl7.org/fhir/sid/icd-10",
+                        "code" => (!empty($row['kdIcd']) ? $row['kdIcd'] : 'A91'),
+                        "display" => (!empty($row['NmIcd']) ? $row['NmIcd'] : 'Dengue haemorrhagic fever')
+                    ]
+                ]
+            ]
+        ];
+        $payload['supportingInfo'] = [];
 
         if (!empty($row['Observation_Rad1'])) {
             $payload['supportingInfo'][] = [

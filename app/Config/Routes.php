@@ -37,6 +37,18 @@ $routes->group('api', ['namespace' => 'App\Controllers\Api'], function ($routes)
     $routes->get('satusehat/push-all', 'SatuSehat::pushAll');                          // push semua (by ?date=)
     $routes->get('satusehat/push-regno/(:segment)', 'SatuSehat::pushByRegno/$1');      // push 1 regno
     $routes->get('satusehat/push-date/(:segment)', 'SatuSehat::pushByDate/$1');        // push by tanggal (path param)
+    $routes->post('satusehat/encounter-with-ihs', 'SatuSehat::hitEncounterWithIhs');
+
+    // Radiologi Integration Routes
+    $routes->group('satusehat/radiology', ['namespace' => 'App\Controllers\Api\SatuSehat'], function ($routes) {
+        $routes->post('procedure', 'RadiologiIntegration::pushProcedure');
+        $routes->post('observation-pregnancy', 'RadiologiIntegration::pushPregnancyStatus');
+        $routes->post('allergy', 'RadiologiIntegration::pushAllergy');
+        $routes->post('service-request', 'RadiologiIntegration::pushServiceRequest');
+        $routes->get('imaging-study/search', 'RadiologiIntegration::searchImagingStudy');
+        $routes->post('observation-result', 'RadiologiIntegration::pushObservationResult');
+        $routes->post('diagnostic-report', 'RadiologiIntegration::pushDiagnosticReport');
+    });
 
 
     // DICOM Routes
@@ -53,7 +65,10 @@ $routes->group('api', ['namespace' => 'App\Controllers\Api'], function ($routes)
 
     // PSRI Routes
     $routes->post('psri/get-all', 'PsriController::getAllPsri');
+<<<<<<< HEAD
     
+=======
+>>>>>>> c812d9bc811c092362b6d1d019c303cc1da7aaba
 
     // Public (no auth required)
     $routes->post('login', 'Login::index');
