@@ -78,7 +78,7 @@ class SatuSehat extends BaseController
         }
         if($row['KdDocSatuSehat'] == '')
         {
-            return $this->response->setJSON(['status' => 'error', 'message' => 'Data KdDocSatuSehat tidak ditemukan for regno: ' . $regno])->setStatusCode(404);
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Data Kode Dokter Satu Sehat tidak ditemukan'])->setStatusCode(404);
         }
 
         // 1. Resolve IHS
