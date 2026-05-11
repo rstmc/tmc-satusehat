@@ -1184,7 +1184,7 @@ class SatuSehat extends BaseController
         $row['NamaObat'] = $row['NmObat'];
         $row['KFA']      = !empty($row['kfa_code']) ? $row['kfa_code'] : (!empty($row['KfaCode']) ? $row['KfaCode'] : '');
 
-        $medicationController = new Medication($this->service);
+        $medicationController = new \App\Controllers\Api\SatuSehat\Medication\MasterMedication($this->service);
         
         // Encounter ID dummy karena Medication resource bisa jadi stand-alone
         $encounterId = null;

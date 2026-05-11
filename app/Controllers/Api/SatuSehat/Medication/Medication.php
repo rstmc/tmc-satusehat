@@ -6,27 +6,6 @@ class Medication extends MedicationBase
 {
     public function buildPayload($row, $encounterId)
     {
-        // Validasi input data dari row
-        $requiredFields = [
-            'KodeObat' => 'Kode Obat',
-            'NamaObat' => 'Nama Obat',
-            'KFA' => 'KFA Code (Kode KFA)',
-            'KfaBentukSediaanSystem' => 'KFA Bentuk Sediaan System',
-            'KfaBentukSediaanCode' => 'KFA Bentuk Sediaan Code',
-            'KfaBentukSediaanDisplay' => 'KFA Bentuk Sediaan Display',
-        ];
-
-        $missingFields = [];
-        foreach ($requiredFields as $field => $label) {
-            if (empty($row[$field])) {
-                $missingFields[] = $label;
-            }
-        }
-
-        if (!empty($missingFields)) {
-            throw new \Exception("Validasi gagal, data berikut kosong: " . implode(', ', $missingFields));
-        }
-
         // Organization ID from environment or config
         $orgId = getenv('SATUSEHAT_ORG_ID');
 
@@ -41,15 +20,15 @@ class Medication extends MedicationBase
                 [
                     "system" => "http://sys-ids.kemkes.go.id/medication/" . $orgId,
                     "use" => "official",
-                    "value" => $row['KodeObat']
+                    "value" => $row['KodeObat'] ?? ''
                 ]
             ],
             "code" => [
                 "coding" => [
                     [
                         "system" => "http://sys-ids.kemkes.go.id/kfa",
-                        "code" => $row['KFA'],
-                        "display" => $row['NamaObat']
+                        "code" => (!empty($row['KFA']) ? $row['KFA'] : (!empty($row['KodeObat']) ? explode('-', $row['KodeObat'])[0] : "93001019")),
+                        "display" => (!empty($row['NamaObat']) ? $row['NamaObat'] : "Obat Tambahan")
                     ]
                 ]
             ],
@@ -60,9 +39,9 @@ class Medication extends MedicationBase
             "form" => [
                 "coding" => [
                     [
-                        "system" => $row['KfaBentukSediaanSystem'],
-                        "code" => $row['KfaBentukSediaanCode'],
-                        "display" => $row['KfaBentukSediaanDisplay']
+                        "system" => "http://terminology.kemkes.go.id/CodeSystem/medication-form",
+                        "code" => "BS023",
+                        "display" => "Kaplet Salut Selaput"
                     ]
                 ]
             ],
@@ -82,41 +61,13 @@ class Medication extends MedicationBase
             ]
         ];
 
-        if (!empty($row['KfaKomposisiCode'])) {
-            $payload['ingredient'] = [
-                [
-                    "itemCodeableConcept" => [
-                        "coding" => [
-                            [
-                                "system" => !empty($row['KfaKomposisiSystem']) ? $row['KfaKomposisiSystem'] : "http://sys-ids.kemkes.go.id/kfa",
-                                "code" => $row['KfaKomposisiCode'],
-                                "display" => !empty($row['KfaKomposisiDisplay']) ? $row['KfaKomposisiDisplay'] : $row['NamaObat']
-                            ]
-                        ]
-                    ],
-                    "isActive" => true,
-                    "strength" => [
-                        "numerator" => [
-                            "value" => isset($row['KfaKadar']) && is_numeric($row['KfaKadar']) ? (float)$row['KfaKadar'] : 1,
-                            "system" => "http://unitsofmeasure.org",
-                            "code" => !empty($row['KfaSatuanKadar']) ? $row['KfaSatuanKadar'] : "mg"
-                        ],
-                        "denominator" => [
-                            "value" => isset($row['KfaPembagi']) && is_numeric($row['KfaPembagi']) ? (float)$row['KfaPembagi'] : 1,
-                            "system" => "http://terminology.hl7.org/CodeSystem/v3-orderableDrugForm",
-                            "code" => !empty($row['KfaSatuanBentuk']) ? $row['KfaSatuanBentuk'] : "TAB"
-                        ]
-                    ]
-                ]
-            ];
-        }
-
         return $payload;
     }
 
     public function push($row, $encounterId)
     {
         $payload = $this->buildPayload($row, $encounterId);
-        return $this->sendFHIRMedication($payload);
+        $medicationId = !empty($row['Medication_id_satu_sehat']) ? $row['Medication_id_satu_sehat'] : null;
+        return $this->sendFHIRMedication($payload, $medicationId);
     }
 }
