@@ -57,7 +57,26 @@ class MasterObat extends Model
         'BentukSediaan',
         'KekuatanSediaan',
         'JenisKemasan',
-        'IsiKemasan'
+        'IsiKemasan',
+        'kfa_code',
+        'kfa_name',
+        'medication_code',
+        'NamaObatPRB',
+        'Status',
+        'KfaCode',
+        'KfaDisplay',
+        'KfaSystem',
+        'KfaBentukSediaanCode',
+        'KfaBentukSediaanDisplay',
+        'KfaBentukSediaanSystem',
+        'KfaKomposisiCode',
+        'KfaKomposisiDisplay',
+        'KfaKomposisiSystem',
+        'KfaKadar',
+        'KfaSatuanKadar',
+        'KfaPembagi',
+        'KfaSatuanBentuk',
+        'Medication_id_satu_sehat'
     ];
 
     public function searchObat($keyword, $limit = 20, $offset = 0)

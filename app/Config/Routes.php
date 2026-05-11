@@ -38,6 +38,7 @@ $routes->group('api', ['namespace' => 'App\Controllers\Api'], function ($routes)
     $routes->get('satusehat/push-regno/(:segment)', 'SatuSehat::pushByRegno/$1');      // push 1 regno
     $routes->get('satusehat/push-date/(:segment)', 'SatuSehat::pushByDate/$1');        // push by tanggal (path param)
     $routes->post('satusehat/encounter-with-ihs', 'SatuSehat::hitEncounterWithIhs');
+    $routes->get('satusehat/push-medication/(:any)', 'SatuSehat::pushMedicationByKdObat/$1');
 
     // Radiologi Integration Routes
     $routes->group('satusehat/radiology', ['namespace' => 'App\Controllers\Api\SatuSehat'], function ($routes) {

@@ -1165,4 +1165,54 @@ class SatuSehat extends BaseController
         $date = $this->request->getGet('date') ?? date('Y-m-d');
         return $this->pushByDate($date);
     }
+    
+    public function pushMedicationByKdObat($kdObat)
+    {
+        $obatModel = new \App\Models\MasterObat();
+        $row = $obatModel->find($kdObat);
+
+        if (!$row) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Data obat tidak ditemukan untuk KdObat: ' . $kdObat])->setStatusCode(404);
+        }
+
+        // Kita butuh array structure yang sesuai dengan ekspektasi buildPayload
+        // Di Medication.php, dicarinya $row['KFA'], $row['KodeObat'], $row['NamaObat'].
+        // Di MasterObat nama kolomnya: KdObat, NmObat, kfa_code / KfaCode (tergantung schema).
+        // Mari kita mapping ke format yang dibutuhkan Medication.
+        
+        $row['KodeObat'] = $row['KdObat'];
+        $row['NamaObat'] = $row['NmObat'];
+        $row['KFA']      = !empty($row['kfa_code']) ? $row['kfa_code'] : (!empty($row['KfaCode']) ? $row['KfaCode'] : '');
+
+        $medicationController = new Medication($this->service);
+        
+        // Encounter ID dummy karena Medication resource bisa jadi stand-alone
+        $encounterId = null;
+
+        try {
+            $payload = $medicationController->buildPayload($row, $encounterId);
+            
+            // Hit API
+            $result = $medicationController->push($row, $encounterId);
+
+            if (isset($result['status']) && $result['status'] === 'success' && !empty($result['id'])) {
+                $obatModel->update($kdObat, [
+                    'Medication_id_satu_sehat' => $result['id']
+                ]);
+            }
+
+            return $this->response->setJSON([
+                'status'  => 'success',
+                'kdObat'  => $kdObat,
+                'payload' => $payload,
+                'result'  => $result
+            ]);
+        } catch (\Exception $e) {
+            return $this->response->setJSON([
+                'status' => 'error',
+                'message' => $e->getMessage()
+            ])->setStatusCode(400);
+        }
+    }
 }
+
