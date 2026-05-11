@@ -13,10 +13,16 @@ abstract class MedicationBase
         $this->service = $service;
     }
 
-    protected function sendFHIRMedication($payload)
+    protected function sendFHIRMedication($payload, $medicationId = null)
     {
         try {
-            $response = $this->service->post('Medication', $payload);
+            if ($medicationId) {
+                $payload['id'] = $medicationId;
+                $response = $this->service->put('Medication', $medicationId, $payload);
+            } else {
+                $response = $this->service->post('Medication', $payload);
+            }
+            
             if (isset($response['id'])) {
                 return ['status' => 'success', 'id' => $response['id']];
             } else {
