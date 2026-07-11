@@ -235,6 +235,58 @@ class SatuSehat extends BaseController
         }
 
         $isEmer = ($kdPoli === '30');
+        $isRanap = (strtoupper($row['KdTuju'] ?? '') === 'RI');
+
+        $classCode = 'AMB';
+        $classDisplay = 'ambulatory';
+        if ($isEmer) {
+            $classCode = 'EMER';
+            $classDisplay = 'emergency';
+        } elseif ($isRanap) {
+            $classCode = 'IMP';
+            $classDisplay = 'inpatient';
+        }
+
+        $locationServiceSystem = $isRanap 
+            ? 'http://terminology.kemkes.go.id/CodeSystem/locationServiceClass-Inpatient' 
+            : 'http://terminology.kemkes.go.id/CodeSystem/locationServiceClass-Outpatient';
+
+        $locationServiceCode = !empty($row['LocationServiceClassCode']) 
+            ? $row['LocationServiceClassCode'] 
+            : ($isRanap ? '3' : 'reguler');
+
+        $locationServiceDisplay = !empty($row['LocationServiceClassDisplay']) 
+            ? $row['LocationServiceClassDisplay'] 
+            : ($isRanap ? 'Kelas 3' : 'Kelas Reguler');
+
+        $status = 'arrived';
+        $statusHistory = [
+            [
+                'status' => 'arrived',
+                'period' => ['start' => $startDateTime],
+            ]
+        ];
+        $period = ['start' => $startDateTime];
+
+        // Skip dulu untuk pasien pulang (di-comment sementara)
+        /*
+        if (!empty($row['TglPulang'])) {
+            $status = 'finished';
+            $pDate = date('Y-m-d', strtotime($row['TglPulang']));
+            $pTime = !empty($row['JamPulang']) ? date('H:i:s', strtotime($row['JamPulang'])) : '23:59:59';
+            $endDateTime = date('c', strtotime($pDate . ' ' . $pTime));
+
+            $statusHistory[0]['period']['end'] = $endDateTime;
+            $statusHistory[] = [
+                'status' => 'finished',
+                'period' => [
+                    'start' => $endDateTime,
+                    'end' => $endDateTime
+                ]
+            ];
+            $period['end'] = $endDateTime;
+        }
+        */
 
         return [
             'resourceType' => 'Encounter',
@@ -244,17 +296,12 @@ class SatuSehat extends BaseController
                     'value' => $row['Regno'],
                 ]
             ],
-            'status' => 'arrived',
-            'statusHistory' => [
-                [
-                    'status' => 'arrived',
-                    'period' => ['start' => $startDateTime],
-                ]
-            ],
+            'status' => $status,
+            'statusHistory' => $statusHistory,
             'class' => [
                 'system' => 'http://terminology.hl7.org/CodeSystem/v3-ActCode',
-                'code' => $isEmer ? 'EMER' : 'AMB',
-                'display' => $isEmer ? 'emergency' : 'ambulatory',
+                'code' => $classCode,
+                'display' => $classDisplay,
             ],
             'serviceType' => [
                 'coding' => [
@@ -288,7 +335,7 @@ class SatuSehat extends BaseController
                     ],
                 ]
             ],
-            'period' => ['start' => $startDateTime],
+            'period' => $period,
             'location' => [
                 [
                     'location' => [
@@ -305,9 +352,9 @@ class SatuSehat extends BaseController
                                     'valueCodeableConcept' => [
                                         'coding' => [
                                             [
-                                                'system' => 'http://terminology.kemkes.go.id/CodeSystem/locationServiceClass-Outpatient',
-                                                'code' => (!empty($row['LocationServiceClassCode']) ? $row['LocationServiceClassCode'] : 'reguler'),
-                                                'display' => (!empty($row['LocationServiceClassDisplay']) ? $row['LocationServiceClassDisplay'] : 'Kelas Reguler'),
+                                                'system' => $locationServiceSystem,
+                                                'code' => $locationServiceCode,
+                                                'display' => $locationServiceDisplay,
                                             ]
                                         ]
                                     ]
