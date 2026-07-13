@@ -70,6 +70,8 @@ class Register extends Model
                       MAX(A.KdPoli) AS KdPoli,
                       MAX(D.NmRuanganKemenkes) AS NmRuanganKemenkes,
                       MAX(D.IdRuanganKemenkes) AS IdRuanganKemenkes,
+                      NULL AS IdBedKemenkes,
+                      NULL AS NmBedKemenkes,
                       MAX(A.KdIcd) AS KdIcd,
                       MAX(CAST(E.DIAGNOSA AS NVARCHAR(MAX))) AS NmIcd,
                       MAX(CAST(F.Subjective AS NVARCHAR(MAX))) AS Subjective,
@@ -108,20 +110,20 @@ class Register extends Model
                   LEFT JOIN dbERM.dbo.cppt F
                       ON F.Regno COLLATE DATABASE_DEFAULT
                          = A.Regno COLLATE DATABASE_DEFAULT
-                     AND F.MedRec COLLATE DATABASE_DEFAULT
+                      AND F.MedRec COLLATE DATABASE_DEFAULT
                          = A.Medrec COLLATE DATABASE_DEFAULT
-                     AND F.KdDoc COLLATE DATABASE_DEFAULT
+                      AND F.KdDoc COLLATE DATABASE_DEFAULT
                          = A.KdDoc COLLATE DATABASE_DEFAULT
-                     AND F.DiisiOleh = 'dokter'
+                      AND F.DiisiOleh = 'dokter'
                   LEFT JOIN PengkajianTerakhir G
                       ON G.Regno COLLATE DATABASE_DEFAULT
                          = A.Regno COLLATE DATABASE_DEFAULT
-                     AND G.rn = 1
+                      AND G.rn = 1
                   WHERE {$where}
                   GROUP BY A.Regno
-
+ 
                   UNION ALL
-
+ 
                   SELECT
                       A.Regno,
                       MAX(A.Medrec) AS Medrec,
@@ -135,8 +137,10 @@ class Register extends Model
                       MAX(C.NmDoc) AS NmDoc,
                       MAX(C.KdDocSatuSehat) AS KdDocSatuSehat,
                       MAX(A.KdPoli) AS KdPoli,
-                      MAX(D.NmRuanganKemenkes) AS NmRuanganKemenkes,
-                      MAX(D.IdRuanganKemenkes) AS IdRuanganKemenkes,
+                      MAX(KLS.NmRuanganKemenkes) AS NmRuanganKemenkes,
+                      MAX(KLS.IdRuanganKemenkes) AS IdRuanganKemenkes,
+                      MAX(DTT.IdRuanganKemenkes) AS IdBedKemenkes,
+                      MAX(DTT.NmRuanganKemenkes) AS NmBedKemenkes,
                       MAX(A.KdIcd) AS KdIcd,
                       MAX(CAST(A.Diagnosa AS NVARCHAR(MAX))) AS NmIcd,
                       NULL AS Subjective,
@@ -187,16 +191,20 @@ class Register extends Model
                       MAX(H.Tanggal) AS TglPulang,
                       MAX(H.Jam) AS JamPulang
                   FROM FPPRI A
+
                   INNER JOIN MasterPS B
-                      ON B.MedRec COLLATE DATABASE_DEFAULT
-                         = A.Medrec COLLATE DATABASE_DEFAULT
-                         AND A.kdtuju = 'RI'
+                      ON B.MedRec COLLATE DATABASE_DEFAULT = A.Medrec COLLATE DATABASE_DEFAULT
+
                   INNER JOIN FtDokter C
                       ON C.KdDoc COLLATE DATABASE_DEFAULT
-                         = A.KdDocRS COLLATE DATABASE_DEFAULT
-                  INNER JOIN POLItpp D
-                      ON D.KDPoli COLLATE DATABASE_DEFAULT
-                         = A.KdPoli COLLATE DATABASE_DEFAULT
+                         = A.KdDocRawat COLLATE DATABASE_DEFAULT
+                  LEFT JOIN Detailttidur DTT
+                      ON DTT.kdbangsal COLLATE DATABASE_DEFAULT = A.KdBangsal COLLATE DATABASE_DEFAULT
+                      AND DTT.kdkelas COLLATE DATABASE_DEFAULT = A.KdKelas COLLATE DATABASE_DEFAULT
+                      AND DTT.nokamar COLLATE DATABASE_DEFAULT = A.nokamar COLLATE DATABASE_DEFAULT
+                      AND DTT.ttnomor COLLATE DATABASE_DEFAULT = A.NoTTidur COLLATE DATABASE_DEFAULT
+                  LEFT JOIN TBLKelas KLS
+                      ON KLS.KDKelas COLLATE DATABASE_DEFAULT = A.KdKelas COLLATE DATABASE_DEFAULT
                   OUTER APPLY (
                       SELECT TOP 1 * FROM dbFORM.dbo.mp_assesment_medis_awal_neonatus
                       WHERE DATEDIFF(day, B.Bod, A.Regdate) <= 18

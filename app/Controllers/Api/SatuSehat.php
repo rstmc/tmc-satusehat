@@ -288,6 +288,57 @@ class SatuSehat extends BaseController
         }
         */
 
+        $locations = [
+            [
+                'location' => [
+                    'reference' => 'Location/' . $row['IdRuanganKemenkes'],
+                    'display' => $row['NmRuanganKemenkes'],
+                ],
+                'period' => ['start' => $startDateTime],
+                'extension' => [
+                    [
+                        'url' => 'https://fhir.kemkes.go.id/r4/StructureDefinition/ServiceClass',
+                        'extension' => [
+                            [
+                                'url' => 'value',
+                                'valueCodeableConcept' => [
+                                    'coding' => [
+                                        [
+                                            'system' => $locationServiceSystem,
+                                            'code' => $locationServiceCode,
+                                            'display' => $locationServiceDisplay,
+                                        ]
+                                    ]
+                                ]
+                            ],
+                            [
+                                'url' => 'upgradeClassIndicator',
+                                'valueCodeableConcept' => [
+                                    'coding' => [
+                                        [
+                                            'system' => 'http://terminology.kemkes.go.id/CodeSystem/locationUpgradeClass',
+                                            'code' => (!empty($row['LocationUpgradeClassCode']) ? $row['LocationUpgradeClassCode'] : 'kelas-tetap'),
+                                            'display' => (!empty($row['LocationUpgradeClassDisplay']) ? $row['LocationUpgradeClassDisplay'] : 'Kelas Tetap Perawatan'),
+                                        ]
+                                    ]
+                                ]
+                            ],
+                        ]
+                    ]
+                ]
+            ]
+        ];
+
+        if (!empty($row['IdBedKemenkes'])) {
+            $locations[] = [
+                'location' => [
+                    'reference' => 'Location/' . $row['IdBedKemenkes'],
+                    'display' => $row['NmBedKemenkes'],
+                ],
+                'period' => ['start' => $startDateTime],
+            ];
+        }
+
         return [
             'resourceType' => 'Encounter',
             'identifier' => [
@@ -302,7 +353,7 @@ class SatuSehat extends BaseController
                 'system' => 'http://terminology.hl7.org/CodeSystem/v3-ActCode',
                 'code' => $classCode,
                 'display' => $classDisplay,
-            ],
+              ],
             'serviceType' => [
                 'coding' => [
                     [
@@ -336,46 +387,7 @@ class SatuSehat extends BaseController
                 ]
             ],
             'period' => $period,
-            'location' => [
-                [
-                    'location' => [
-                        'reference' => 'Location/' . $row['IdRuanganKemenkes'],
-                        'display' => $row['NmRuanganKemenkes'],
-                    ],
-                    'period' => ['start' => $startDateTime],
-                    'extension' => [
-                        [
-                            'url' => 'https://fhir.kemkes.go.id/r4/StructureDefinition/ServiceClass',
-                            'extension' => [
-                                [
-                                    'url' => 'value',
-                                    'valueCodeableConcept' => [
-                                        'coding' => [
-                                            [
-                                                'system' => $locationServiceSystem,
-                                                'code' => $locationServiceCode,
-                                                'display' => $locationServiceDisplay,
-                                            ]
-                                        ]
-                                    ]
-                                ],
-                                [
-                                    'url' => 'upgradeClassIndicator',
-                                    'valueCodeableConcept' => [
-                                        'coding' => [
-                                            [
-                                                'system' => 'http://terminology.kemkes.go.id/CodeSystem/locationUpgradeClass',
-                                                'code' => (!empty($row['LocationUpgradeClassCode']) ? $row['LocationUpgradeClassCode'] : 'kelas-tetap'),
-                                                'display' => (!empty($row['LocationUpgradeClassDisplay']) ? $row['LocationUpgradeClassDisplay'] : 'Kelas Tetap Perawatan'),
-                                            ]
-                                        ]
-                                    ]
-                                ],
-                            ]
-                        ]
-                    ]
-                ]
-            ],
+            'location' => $locations,
             'serviceProvider' => [
                 'reference' => 'Organization/' . $orgId,
             ],
