@@ -16,14 +16,9 @@ class Register extends Model
      */
     public function getEncounterData($date)
     {
-        $sql = $this->_encounterBaseSql() . "
-                 WHERE
-                     CAST(A.Regdate AS DATE) = ?
-                     AND C.KdDocSatuSehat IS NOT NULL
-                 GROUP BY
-                     A.Regno";
+        $sql = $this->_encounterBaseSql("CAST(A.Regdate AS DATE) = ? AND C.KdDocSatuSehat IS NOT NULL");
 
-        return $this->db->query($sql, [$date])->getResultArray();
+        return $this->db->query($sql, [$date, $date])->getResultArray();
     }
 
     /**
@@ -31,13 +26,9 @@ class Register extends Model
      */
     public function getEncounterDataByRegno($regno)
     {
-        $sql = $this->_encounterBaseSql() . "
-                 WHERE
-                     A.Regno = ?
-                 GROUP BY
-                     A.Regno";
+        $sql = $this->_encounterBaseSql("A.Regno = ?");
 
-        return $this->db->query($sql, [$regno])->getResultArray();
+        return $this->db->query($sql, [$regno, $regno])->getResultArray();
     }
 
     /**
@@ -52,7 +43,7 @@ class Register extends Model
     /**
      * Base SQL yang dipakai bersama oleh getEncounterData dan getEncounterDataByRegno.
      */
-    private function _encounterBaseSql(): string
+    private function _encounterBaseSql(string $where): string
     {
         return "WITH PengkajianTerakhir AS (
                       SELECT
@@ -126,6 +117,8 @@ class Register extends Model
                       ON G.Regno COLLATE DATABASE_DEFAULT
                          = A.Regno COLLATE DATABASE_DEFAULT
                      AND G.rn = 1
+                  WHERE {$where}
+                  GROUP BY A.Regno
 
                   UNION ALL
 
@@ -181,7 +174,7 @@ class Register extends Model
                       MAX(CASE 
                           WHEN DATEDIFF(day, B.Bod, A.Regdate) <= 18 THEN CAST(NEO.pb1 AS VARCHAR(50))
                           WHEN DATEDIFF(day, B.Bod, A.Regdate) <= (365 * 18) THEN CAST(AN.tbanak AS VARCHAR(50))
-                          ELSE CAST(DWS.tvit6 AS VARCHAR(50))
+                          ELSE CAST(DWS.kg6 AS VARCHAR(50))
                       END) AS TinggiBadan,
                       MAX(CASE 
                           WHEN DATEDIFF(day, B.Bod, A.Regdate) <= 18 THEN CAST(NEO.bb AS VARCHAR(50))
@@ -224,7 +217,9 @@ class Register extends Model
                       ORDER BY id DESC
                   ) DWS
                   LEFT JOIN FPulang H
-                      ON H.Regno COLLATE DATABASE_DEFAULT = A.Regno COLLATE DATABASE_DEFAULT";
+                      ON H.Regno COLLATE DATABASE_DEFAULT = A.Regno COLLATE DATABASE_DEFAULT
+                  WHERE {$where}
+                  GROUP BY A.Regno";
     }
 
     public function updateEncounter($regno, $medrec, $encounterId)
