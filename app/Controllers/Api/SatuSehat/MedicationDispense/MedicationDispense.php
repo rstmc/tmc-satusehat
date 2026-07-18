@@ -51,8 +51,12 @@ class MedicationDispense extends MedicationDispenseBase
         }
 
         $reqRef = $medRequestId ?? $row['MedicationRequestId'] ?? '';
-        if (strpos($reqRef, 'urn:uuid:') !== 0) {
-            $reqRef = "MedicationRequest/" . $reqRef;
+        if (!empty($reqRef)) {
+            if (strpos($reqRef, 'urn:uuid:') !== 0) {
+                $reqRef = "MedicationRequest/" . $reqRef;
+            }
+        } else {
+            $reqRef = '';
         }
 
         $satuanRaw = $row['Satuan'] ?? $row['SatuanObat'] ?? 'TAB';
