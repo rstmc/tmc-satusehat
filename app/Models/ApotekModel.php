@@ -37,13 +37,14 @@ class ApotekModel extends Model
                 DetailApotikTmp.SignaTiming,
                 DetailApotikTmp.NoRacikan,
                 DetailApotikTmp.BentukRacikan,
-                \'91000330\' as KFA,
-                \'91000330\' as KFA_Ingredient,
+                COALESCE(MasterObat.KfaCode, MasterObat.kfa_code) as KFA,
+                COALESCE(MasterObat.KfaCode, MasterObat.kfa_code) as KFA_Ingredient,
                 MasterObat.ZatAktifObat,
                 MasterObat.Kekuatan,
                 MasterObat.Satuan,
                 MasterObat.Kemasan,
-                MasterObat.BentukSediaan
+                MasterObat.BentukSediaan,
+                MasterObat.Medication_id_satu_sehat
             ')
             ->join('DetailApotikTmp', 'HeadApotikTmp.Id = DetailApotikTmp.IdHead')
             ->join('MasterObat', 'DetailApotikTmp.KodeObat = MasterObat.KdObat', 'left')
@@ -75,9 +76,10 @@ class ApotekModel extends Model
                 DetailApotik.JumlahHari,
                 DetailApotik.NoteSigna,
                 DetailApotik.NoteCaraMinumObat,
-                \'91000330\' as KFA,
-                \'91000330\' as KFA_Ingredient,
-                MasterObat.Satuan
+                COALESCE(MasterObat.KfaCode, MasterObat.kfa_code) as KFA,
+                COALESCE(MasterObat.KfaCode, MasterObat.kfa_code) as KFA_Ingredient,
+                MasterObat.Satuan,
+                MasterObat.Medication_id_satu_sehat
             ')
             ->join('DetailApotik', 'HeadApotik.BLCode = DetailApotik.BLCode')
             ->join('MasterObat', 'DetailApotik.KodeObat = MasterObat.KdObat', 'left')
@@ -111,9 +113,10 @@ class ApotekModel extends Model
                 DetailApotikKronis.JumlahHari,
                 DetailApotikKronis.NoteSigna,
                 DetailApotikKronis.NoteCaraMinumObat,
-                \'91000330\' as KFA,
-                \'91000330\' as KFA_Ingredient,
-                MasterObat.Satuan
+                COALESCE(MasterObat.KfaCode, MasterObat.kfa_code) as KFA,
+                COALESCE(MasterObat.KfaCode, MasterObat.kfa_code) as KFA_Ingredient,
+                MasterObat.Satuan,
+                MasterObat.Medication_id_satu_sehat
             ')
             ->join('DetailApotikKronis', 'HeadApotikKronis.BLCode = DetailApotikKronis.BLCode')
             ->join('MasterObat', 'DetailApotikKronis.KodeObat = MasterObat.KdObat', 'left')

@@ -74,6 +74,18 @@ class MedicationRequest extends MedicationRequestBase
         ];
         $drugFormCode = $mapping[$sUpper] ?? 'TAB';
 
+        $qtyRaw = !empty($row['Qty']) ? $row['Qty'] : (!empty($row['JumlahObat']) ? $row['JumlahObat'] : 1);
+        $qtyVal = floatval($qtyRaw);
+        if ($qtyVal <= 0) {
+            $qtyVal = abs($qtyVal) ?: 1;
+        }
+
+        $durationRaw = !empty($row['Duration']) ? $row['Duration'] : (!empty($row['JumlahHari']) ? $row['JumlahHari'] : 1);
+        $durationVal = floatval($durationRaw);
+        if ($durationVal <= 0) {
+            $durationVal = abs($durationVal) ?: 1;
+        }
+
         $payload = [
             "resourceType" => "MedicationRequest",
             "identifier" => [
@@ -182,7 +194,7 @@ class MedicationRequest extends MedicationRequestBase
                                 ]
                             ],
                             "doseQuantity" => [
-                                "value" => (int)(!empty($row['Qty']) ? $row['Qty'] : 1),
+                                "value" => $qtyVal,
                                 "unit" => $drugFormCode,
                                 "system" => "http://terminology.hl7.org/CodeSystem/v3-orderableDrugForm",
                                 "code" => $drugFormCode
@@ -204,13 +216,13 @@ class MedicationRequest extends MedicationRequestBase
                 ],
                 "numberOfRepeatsAllowed" => 0,
                 "quantity" => [
-                    "value" => (int)(!empty($row['Qty']) ? $row['Qty'] : 10),
+                    "value" => $qtyVal,
                     "unit" => $drugFormCode,
                     "system" => "http://terminology.hl7.org/CodeSystem/v3-orderableDrugForm",
                     "code" => $drugFormCode
                 ],
                 "expectedSupplyDuration" => [
-                    "value" => (int)(!empty($row['Duration']) ? $row['Duration'] : 10),
+                    "value" => $durationVal,
                     "unit" => "days",
                     "system" => "http://unitsofmeasure.org",
                     "code" => "d"
