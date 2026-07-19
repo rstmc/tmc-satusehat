@@ -33,7 +33,7 @@ class ApotekModel extends Model
                 DetailApotikTmp.NoteCaraMinumObat,
                 DetailApotikTmp.ObatKronis,
                 DetailApotikTmp.SignaManual,
-                DetailApotikTmp.ObatPulang,
+                HeadApotikTmp.ObatPulang,
                 DetailApotikTmp.SignaTiming,
                 DetailApotikTmp.NoRacikan,
                 DetailApotikTmp.BentukRacikan,
@@ -55,7 +55,7 @@ class ApotekModel extends Model
     public function getDispenseObatByRegno($regno)
     {
         // Try HeadApotik first
-        $data = $this->db->table('HeadApotik')
+        $dataHead = $this->db->table('HeadApotik')
             ->select('
                 HeadApotik.BLCode,
                 HeadApotik.Regno,
@@ -79,7 +79,9 @@ class ApotekModel extends Model
                 COALESCE(MasterObat.KfaCode, MasterObat.kfa_code) as KFA,
                 COALESCE(MasterObat.KfaCode, MasterObat.kfa_code) as KFA_Ingredient,
                 MasterObat.Satuan,
-                MasterObat.Medication_id_satu_sehat
+                MasterObat.Medication_id_satu_sehat,
+                0 AS IsObatKronis,
+                ISNULL(HeadApotik.ObatPulang, 0) AS ObatPulang
             ')
             ->join('DetailApotik', 'HeadApotik.BLCode = DetailApotik.BLCode')
             ->join('MasterObat', 'DetailApotik.KodeObat = MasterObat.KdObat', 'left')
@@ -87,12 +89,8 @@ class ApotekModel extends Model
             ->get()
             ->getResultArray();
 
-        if (!empty($data)) {
-            return $data;
-        }
-
-        // If not found, try HeadApotikKronis
-        return $this->db->table('HeadApotikKronis')
+        // Try HeadApotikKronis
+        $dataKronis = $this->db->table('HeadApotikKronis')
             ->select('
                 HeadApotikKronis.BLCode,
                 HeadApotikKronis.Regno,
@@ -116,13 +114,17 @@ class ApotekModel extends Model
                 COALESCE(MasterObat.KfaCode, MasterObat.kfa_code) as KFA,
                 COALESCE(MasterObat.KfaCode, MasterObat.kfa_code) as KFA_Ingredient,
                 MasterObat.Satuan,
-                MasterObat.Medication_id_satu_sehat
+                MasterObat.Medication_id_satu_sehat,
+                1 AS IsObatKronis,
+                0 AS ObatPulang
             ')
             ->join('DetailApotikKronis', 'HeadApotikKronis.BLCode = DetailApotikKronis.BLCode')
             ->join('MasterObat', 'DetailApotikKronis.KodeObat = MasterObat.KdObat', 'left')
             ->where('HeadApotikKronis.Regno', $regno)
             ->get()
             ->getResultArray();
+
+        return array_merge($dataHead, $dataKronis);
     }
     public function getRiwayatObatByMedrec($medrec, $currentRegno = null, $currentRegdate = null)
     {
@@ -151,7 +153,7 @@ class ApotekModel extends Model
                 DetailApotikTmp.NoteCaraMinumObat,
                 DetailApotikTmp.ObatKronis,
                 DetailApotikTmp.SignaManual,
-                DetailApotikTmp.ObatPulang,
+                HeadApotikTmp.ObatPulang,
                 DetailApotikTmp.SignaTiming,
                 DetailApotikTmp.NoRacikan,
                 DetailApotikTmp.BentukRacikan,
@@ -207,7 +209,8 @@ class ApotekModel extends Model
                 DetailApotik.NoteCaraMinumObat,
                 \'91000330\' as KFA,
                 \'91000330\' as KFA_Ingredient,
-                MasterObat.Satuan
+                MasterObat.Satuan,
+                ISNULL(HeadApotik.ObatPulang, 0) AS ObatPulang
             ')
             ->join('DetailApotik', 'HeadApotik.BLCode = DetailApotik.BLCode')
             ->join('MasterObat', 'DetailApotik.KodeObat = MasterObat.KdObat', 'left')
@@ -221,14 +224,7 @@ class ApotekModel extends Model
             $builderHead->where('HeadApotik.RegDate <', $currentRegdate);
         }
 
-        $data = $builderHead
-            ->orderBy('HeadApotik.RegDate', 'DESC')
-            ->get()
-            ->getResultArray();
-
-        if (!empty($data)) {
-            return $data;
-        }
+        $dataHead = $builderHead->get()->getResultArray();
 
         $builderKronis = $this->db->table('HeadApotikKronis')
             ->select('
@@ -253,7 +249,8 @@ class ApotekModel extends Model
                 DetailApotikKronis.NoteCaraMinumObat,
                 \'91000330\' as KFA,
                 \'91000330\' as KFA_Ingredient,
-                MasterObat.Satuan
+                MasterObat.Satuan,
+                0 AS ObatPulang
             ')
             ->join('DetailApotikKronis', 'HeadApotikKronis.BLCode = DetailApotikKronis.BLCode')
             ->join('MasterObat', 'DetailApotikKronis.KodeObat = MasterObat.KdObat', 'left')
@@ -267,9 +264,14 @@ class ApotekModel extends Model
             $builderKronis->where('HeadApotikKronis.RegDate <', $currentRegdate);
         }
 
-        return $builderKronis
-            ->orderBy('HeadApotikKronis.RegDate', 'DESC')
-            ->get()
-            ->getResultArray();
+        $dataKronis = $builderKronis->get()->getResultArray();
+
+        $mergedData = array_merge($dataHead, $dataKronis);
+
+        usort($mergedData, function ($a, $b) {
+            return strcmp($b['RegDate'] ?? '', $a['RegDate'] ?? '');
+        });
+
+        return $mergedData;
     }
 }

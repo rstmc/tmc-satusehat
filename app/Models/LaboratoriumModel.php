@@ -17,7 +17,7 @@ class LaboratoriumModel extends Model
      */
     public function getLabOrders($regno)
     {
-        // HeadBilLabTEMP seems to be the order table
+        // HeadBilLabTEMP is the order table
         $sql = "SELECT
         H.NoTran,
         D.NmTarif,
@@ -25,10 +25,10 @@ class LaboratoriumModel extends Model
         F.NmDoc AS NmDocLab,
         HH.Catatan AS CatatanHasil
         FROM
-        HeadBilLab H
+        HeadBilLabTEMP H
         INNER JOIN DetailBilLab D ON H.NoTran = D.NoTran
         INNER JOIN FtDokter F ON F.KdDoc = H.KdDokter
-        INNER JOIN HeadHasil HH ON HH.Notran = H.NoTran
+        LEFT JOIN HeadHasil HH ON HH.Notran = H.NoTran
         WHERE H.Regno = ?";
         return $this->db->query($sql, [$regno])->getResultArray();
     }

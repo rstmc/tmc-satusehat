@@ -13,3 +13,12 @@
  *
  * @see: https://codeigniter.com/user_guide/extending/common.html
  */
+
+// Force populate getenv() with environment variables from $_ENV and $_SERVER for SatuSehat
+foreach ([$_ENV, $_SERVER] as $envSource) {
+    foreach ($envSource as $key => $val) {
+        if (strpos($key, 'SATUSEHAT_') === 0 && !empty($val) && is_string($val)) {
+            putenv("$key=$val");
+        }
+    }
+}

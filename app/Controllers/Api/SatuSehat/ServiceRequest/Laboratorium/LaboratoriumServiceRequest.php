@@ -28,7 +28,7 @@ class LaboratoriumServiceRequest extends ServiceRequestBase
         $occurrenceDateTime = date('c', strtotime($dateTimeStr));
         $authoredOn = $occurrenceDateTime;
 
-        $orgId = getenv('SATUSEHAT_ORG_ID');
+        $orgId = env('SATUSEHAT_ORG_ID') ?: getenv('SATUSEHAT_ORG_ID') ?: ($_ENV['SATUSEHAT_ORG_ID'] ?? '');
         $labSrId = $row['NoTran']; // Use NoTran as ID
 
         $loincCode = !empty($row['LoincCode']) ? $row['LoincCode'] : '18719-5'; // Chemistry studies (generic example) or 26436-6 (Laboratory studies)
@@ -80,22 +80,28 @@ class LaboratoriumServiceRequest extends ServiceRequestBase
             "requester" => [
                 "reference" => "Practitioner/" . $row['KdDocSatuSehat'],
                 "display" => $row['NmDoc'] ?? ''
-            ],
-            "performer" => [
+            ]
+        ];
+
+        // performer: optional, only send if lab practitioner ID is available
+        if (!empty($row['KdDocSatuSehatLab'])) {
+            $payload["performer"] = [
                 [
-                    "reference" => "Practitioner/" . ($row['KdDocSatuSehatLab'] ?? ''),
+                    "reference" => "Practitioner/" . $row['KdDocSatuSehatLab'],
                     "display" => $row['NmDocLab'] ?? ''
                 ]
-            ],
-            "reasonCode" => [
-                [
-                    "text" => $reasonText
-                ]
-            ],
-            "note" => [
-                [
-                    "text" => $noteText
-                ]
+            ];
+        }
+
+        $payload["reasonCode"] = [
+            [
+                "text" => $reasonText
+            ]
+        ];
+
+        $payload["note"] = [
+            [
+                "text" => $noteText
             ]
         ];
 
