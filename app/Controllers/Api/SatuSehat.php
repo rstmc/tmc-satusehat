@@ -94,7 +94,7 @@ class SatuSehat extends BaseController
             try {
                 $encRes = $this->service->get('Encounter', [
                     'subject' => $row['IHSSatuSehat'],
-                    'identifier' => 'http://sys-ids.kemkes.go.id/encounter/' . getenv('SATUSEHAT_ORG_ID') . '|' . $regno
+                    'identifier' => 'http://sys-ids.kemkes.go.id/encounter/' . $this->getOrgId() . '|' . $regno
                 ]);
 
                 if (isset($encRes['entry']) && count($encRes['entry']) > 0) {
@@ -173,7 +173,7 @@ class SatuSehat extends BaseController
      */
     private function buildEncounterPayload(array $row): array
     {
-        $orgId = getenv('SATUSEHAT_ORG_ID');
+        $orgId = $this->getOrgId();
         $dateOnly = date('Y-m-d', strtotime($row['Regdate']));
         $timeOnly = date('H:i:s', strtotime($row['RegTime']));
         $startDateTime = date('c', strtotime($dateOnly . ' ' . $timeOnly));
@@ -457,7 +457,7 @@ class SatuSehat extends BaseController
 
         if (!$alreadySentEncounterId || $alreadySentEncounterId === 'PENDING-SYNC') {
             try {
-                $orgId = getenv('SATUSEHAT_ORG_ID');
+                $orgId = $this->getOrgId();
                 $encRes = $this->service->get('Encounter', [
                     'identifier' => 'http://sys-ids.kemkes.go.id/encounter/' . $orgId . '|' . $row['Regno']
                 ]);
@@ -485,14 +485,6 @@ class SatuSehat extends BaseController
             }
         }
 
-        if ($alreadySentEncounterId) {
-            return [
-                'regno' => $row['Regno'],
-                'status' => 'skipped',
-                'id' => $alreadySentEncounterId,
-                'message' => 'Sudah dipush ke SatuSehat'
-            ];
-        }
 
         // UUID ini dipakai di seluruh bundle sebagai "identity" Encounter di-request
         $encounterUuid = $this->generateUuid();
@@ -756,7 +748,7 @@ class SatuSehat extends BaseController
                 if (method_exists($medicationController, 'buildPayload')) {
                     $medPayload = $medicationController->buildPayload($tempObat, $encounterId);
                     if ($medPayload) {
-                        $orgId = getenv('SATUSEHAT_ORG_ID');
+                        $orgId = $this->getOrgId();
                         $entries[] = [
                             "fullUrl" => $medUuid,
                             "resource" => $medPayload,
@@ -1101,13 +1093,18 @@ class SatuSehat extends BaseController
         }
 
         // 14. MedicationStatement
+        // Gunakan obatsDispense jika ada (lebih akurat = sudah diserahkan ke pasien),
+        // fallback ke obatsTemp (resep dari dokter)
+        $msObats = !empty($obatsDispense) ? $obatsDispense : $obatsTemp;
         $msController = new MedicationStatement($this->service);
-        foreach ($obats as $item) {
+        foreach ($msObats as $msIndex => $item) {
             if (empty($item['KFA'])) {
                 continue;
             }
 
             $msData = array_merge($row, $item);
+            // Urutan wajib di-set agar identifier setiap MedicationStatement unik (mencegah RuleNumber 20002)
+            $msData['Urutan'] = $msIndex + 1;
 
             if (method_exists($msController, 'buildPayload')) {
                 $msPayload = $msController->buildPayload($msData, $encounterId);
@@ -1127,13 +1124,27 @@ class SatuSehat extends BaseController
             ];
         }
 
-        // Apply conditional create (ifNoneExist) to all POST entries that have identifiers to prevent duplicate errors
+        // Ganti POST + ifNoneExist → conditional PUT untuk resource yang punya identifier.
+        // PUT ResourceType?identifier=system|value:
+        //   - Jika tidak ada match → create baru (201)
+        //   - Jika ada tepat 1 match → update (200)
+        //   - Jika ada >1 match → 412 (data sudah terlanjur duplikat di server, perlu cleanup manual)
+        // Resource tanpa identifier tetap POST biasa (tidak ada cara identify duplikat).
         foreach ($entries as &$entry) {
             if (isset($entry['request']['method']) && $entry['request']['method'] === 'POST') {
                 $payload = $entry['resource'] ?? [];
+                $resourceType = $payload['resourceType'] ?? ($entry['request']['url'] ?? null);
+
+                // Encounter selalu POST (conditional PUT Encounter tidak didukung SatuSehat)
+                if ($resourceType === 'Encounter' || $resourceType === 'Medication') {
+                    continue;
+                }
+
                 $identifierValue = null;
                 $identifierSystem = null;
+
                 if (isset($payload['identifier']) && is_array($payload['identifier'])) {
+                    // Prioritaskan identifier prescription-item untuk resource obat
                     foreach ($payload['identifier'] as $idObj) {
                         if (isset($idObj['system']) && isset($idObj['value'])) {
                             if (strpos($idObj['system'], 'prescription-item') !== false) {
@@ -1148,8 +1159,13 @@ class SatuSehat extends BaseController
                         }
                     }
                 }
+
                 if ($identifierSystem && $identifierValue) {
-                    $entry['request']['ifNoneExist'] = 'identifier=' . $identifierSystem . '|' . $identifierValue;
+                    // Ganti ke conditional PUT
+                    $entry['request']['method'] = 'PUT';
+                    $entry['request']['url']    = $resourceType . '?identifier=' . $identifierSystem . '|' . urlencode($identifierValue);
+                    // Hapus ifNoneExist jika ada (tidak relevan untuk PUT)
+                    unset($entry['request']['ifNoneExist']);
                 }
             }
         }
@@ -1408,6 +1424,11 @@ class SatuSehat extends BaseController
                 'message' => $e->getMessage()
             ])->setStatusCode(400);
         }
+    }
+
+    private function getOrgId(): string
+    {
+        return env('SATUSEHAT_ORG_ID') ?: getenv('SATUSEHAT_ORG_ID') ?: ($_ENV['SATUSEHAT_ORG_ID'] ?? '');
     }
 }
 

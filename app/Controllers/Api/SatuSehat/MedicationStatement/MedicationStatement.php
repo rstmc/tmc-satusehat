@@ -20,7 +20,7 @@ class MedicationStatement extends MedicationStatementBase
             return null;
         }
 
-        $orgId = getenv('SATUSEHAT_ORG_ID');
+        $orgId = env('SATUSEHAT_ORG_ID') ?: getenv('SATUSEHAT_ORG_ID') ?: ($_ENV['SATUSEHAT_ORG_ID'] ?? '');
         $urutan = $row['Urutan'] ?? $row['KodeObat'] ?? '1';
         if (strpos($urutan, '-') !== false) {
             $parts = explode('-', $urutan);
@@ -56,8 +56,12 @@ class MedicationStatement extends MedicationStatementBase
 
         $status = 'active';
         if (isset($row['JumlahHari']) && is_numeric($row['JumlahHari'])) {
-            $endTs = $ts + ((int)$row['JumlahHari'] * 86400);
-            $status = (time() > $endTs) ? 'completed' : 'active';
+            // Pakai round() untuk handle decimal (misal 3.50 hari)
+            $jumlahHariInt = (int)round((float)$row['JumlahHari']);
+            if ($jumlahHariInt > 0) {
+                $endTs = $ts + ($jumlahHariInt * 86400);
+                $status = (time() > $endTs) ? 'completed' : 'active';
+            }
         }
 
         // Dosage text construction
@@ -70,6 +74,21 @@ class MedicationStatement extends MedicationStatementBase
         }
         $dosageText = trim($dosageText);
         if (empty($dosageText)) $dosageText = "Pakai sesuai instruksi";
+
+        // Tentukan category berdasarkan jenis kunjungan (konsisten dengan MedicationRequest/Dispense)
+        $kdTuju      = strtoupper(trim($row['KdTuju'] ?? 'RJ'));
+        $kdPoli      = trim($row['KdPoli'] ?? '');
+        $isIGD       = ($kdPoli === '30');
+        $isRawatInap = ($kdTuju !== 'RJ');
+
+        if (!$isIGD && !$isRawatInap) {
+            $msCategory     = 'outpatient';
+            $msCategoryDisp = 'Outpatient';
+        } else {
+            $obatPulang = !empty($row['ObatPulang']) && $row['ObatPulang'] == 1;
+            $msCategory     = $obatPulang ? 'discharge' : 'inpatient';
+            $msCategoryDisp = $obatPulang ? 'Discharge' : 'Inpatient';
+        }
 
         $payload = [
             "resourceType" => "MedicationStatement",
@@ -85,8 +104,8 @@ class MedicationStatement extends MedicationStatementBase
                 "coding" => [
                     [
                         "system" => "http://terminology.hl7.org/CodeSystem/medication-statement-category",
-                        "code" => "outpatient",
-                        "display" => "Outpatient"
+                        "code" => $msCategory,
+                        "display" => $msCategoryDisp
                     ]
                 ]
             ],
@@ -107,7 +126,10 @@ class MedicationStatement extends MedicationStatementBase
             ],
             "dateAsserted" => $dateAsserted,
             "informationSource" => [
-                "reference" => "Patient/" . $row['IHSSatuSehat'] // Or Practitioner if we have doctor info
+                // Prioritaskan Practitioner jika ada, fallback ke Patient
+                "reference" => !empty($row['KdDocSatuSehat'])
+                    ? "Practitioner/" . $row['KdDocSatuSehat']
+                    : "Patient/" . $row['IHSSatuSehat']
             ],
             "dosage" => [
                 [
@@ -116,8 +138,8 @@ class MedicationStatement extends MedicationStatementBase
             ]
         ];
 
-        // Optional: Add dosage timing if Signa1/Signa2 available and numeric
-        if (isset($row['Signa1']) && is_numeric($row['Signa1'])) {
+        // Optional: Add dosage timing if Signa1/Signa2 available and numeric >= 1
+        if (isset($row['Signa1']) && is_numeric($row['Signa1']) && (int)$row['Signa1'] >= 1) {
             $payload['dosage'][0]['timing'] = [
                 "repeat" => [
                     "frequency" => (int)$row['Signa1'],

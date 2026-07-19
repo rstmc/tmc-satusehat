@@ -42,6 +42,13 @@ class DiagnosticReport extends DiagnosticReportBase
             }
         }
 
+        // performer: filter Practitioner reference if KdDocSatuSehat is empty
+        $performers = [];
+        if (!empty($row['KdDocSatuSehat'])) {
+            $performers[] = ["reference" => "Practitioner/" . $row['KdDocSatuSehat']];
+        }
+        $performers[] = ["reference" => "Organization/" . $orgId];
+
         $payload = [
             "resourceType" => "DiagnosticReport",
             "identifier" => [
@@ -81,14 +88,7 @@ class DiagnosticReport extends DiagnosticReportBase
             ],
             "effectiveDateTime" => $effectiveDateTime,
             "issued" => $issued,
-            "performer" => [
-                [
-                    "reference" => "Practitioner/" . ($row['KdDocSatuSehat'] ?? '')
-                ],
-                [
-                    "reference" => "Organization/" . $orgId
-                ]
-            ],
+            "performer" => $performers,
             "result" => [], // To be populated
             "specimen" => [], // To be populated
             "basedOn" => [], // To be populated

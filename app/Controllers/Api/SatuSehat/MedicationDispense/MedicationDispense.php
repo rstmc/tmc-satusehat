@@ -7,9 +7,10 @@ class MedicationDispense extends MedicationDispenseBase
     public function buildPayload($row, $encounterId, $medRequestId = null)
     {
         // Organization ID from environment or config
-        $orgId = getenv('SATUSEHAT_ORG_ID');
+        $orgId = env('SATUSEHAT_ORG_ID') ?: getenv('SATUSEHAT_ORG_ID') ?: ($_ENV['SATUSEHAT_ORG_ID'] ?? '');
 
-        $identifierValue = $row['NoResep'] ?? '123456788';
+        // Identifier: gunakan NoResep jika ada, fallback ke regno-urutan
+        $identifierValue = !empty($row['NoResep']) ? $row['NoResep'] : ($row['Regno'] ?? 'UNKNOWN');
         $urutan = $row['Urutan'] ?? $row['KodeObat'] ?? '1';
         if (strpos($urutan, '-') !== false) {
             $parts = explode('-', $urutan);
@@ -85,9 +86,38 @@ class MedicationDispense extends MedicationDispenseBase
         ];
         $drugFormCode = $mapping[$sUpper] ?? 'TAB';
 
+        // daysSupply harus integer — pakai round() untuk handle decimal (misal 3.50 → 4)
         $daysSupply = 1;
-        if (isset($row['JumlahHari']) && is_numeric($row['JumlahHari']) && (int)$row['JumlahHari'] > 0) {
-            $daysSupply = (int)$row['JumlahHari'];
+        if (isset($row['JumlahHari']) && is_numeric($row['JumlahHari'])) {
+            $rounded = (int)round((float)$row['JumlahHari']);
+            if ($rounded > 0) {
+                $daysSupply = $rounded;
+            }
+        }
+
+        // Tentukan category berdasarkan jenis kunjungan:
+        // - RJ bukan poli 30 → outpatient (semua obat adalah obat jalan)
+        // - IGD (KdPoli=30) → cek ObatPulang: 1=discharge, 0=inpatient
+        // - Rawat Inap (KdTuju != RJ) → cek ObatPulang: 1=discharge, 0=inpatient
+        $kdTuju  = strtoupper(trim($row['KdTuju'] ?? 'RJ'));
+        $kdPoli  = trim($row['KdPoli'] ?? '');
+        $isIGD   = ($kdPoli === '30');
+        $isRawatInap = ($kdTuju !== 'RJ');
+
+        if (!$isIGD && !$isRawatInap) {
+            // Rawat jalan biasa (non-IGD) → selalu outpatient
+            $dispenseCategory     = 'outpatient';
+            $dispenseCategoryDisp = 'Outpatient';
+        } else {
+            // IGD atau rawat inap → cek flag ObatPulang per item
+            $obatPulang = !empty($row['ObatPulang']) && $row['ObatPulang'] == 1;
+            if ($obatPulang) {
+                $dispenseCategory     = 'discharge';
+                $dispenseCategoryDisp = 'Discharge';
+            } else {
+                $dispenseCategory     = 'inpatient';
+                $dispenseCategoryDisp = 'Inpatient';
+            }
         }
 
         $payload = [
@@ -109,8 +139,8 @@ class MedicationDispense extends MedicationDispenseBase
                 "coding" => [
                     [
                         "system" => "http://terminology.hl7.org/fhir/CodeSystem/medicationdispense-category",
-                        "code" => "outpatient",
-                        "display" => "Outpatient"
+                        "code" => $dispenseCategory,
+                        "display" => $dispenseCategoryDisp
                     ]
                 ]
             ],
@@ -133,15 +163,13 @@ class MedicationDispense extends MedicationDispenseBase
                     ]
                 ]
             ],
-            "authorizingPrescription" => [
-                [
-                    "reference" => $reqRef
-                ]
-            ],
+            // authorizingPrescription: hanya kirim jika ada referensi MedicationRequest
+
             "quantity" => [
                 "system" => "http://terminology.hl7.org/CodeSystem/v3-orderableDrugForm",
                 "code" => $drugFormCode,
-                "value" => isset($row['Qty']) ? (float)$row['Qty'] : 1
+                // quantity.value harus >= 0 (ambil absolute value jika minus, fallback ke 1)
+                "value" => isset($row['Qty']) ? (abs((int)round((float)$row['Qty'])) ?: 1) : 1
             ],
             "daysSupply" => [
                 "value" => $daysSupply,
@@ -157,7 +185,7 @@ class MedicationDispense extends MedicationDispenseBase
                     "text" => $row['AturanPakai'] ?? ($row['KeteranganPakai'] ?? 'Ikuti petunjuk dokter'),
                     "timing" => [
                         "repeat" => [
-                            "frequency" => isset($row['Signa1']) && is_numeric($row['Signa1']) ? (int)$row['Signa1'] : 1,
+                            "frequency" => isset($row['Signa1']) && is_numeric($row['Signa1']) && (int)$row['Signa1'] >= 1 ? (int)$row['Signa1'] : 1,
                             "period" => 1,
                             "periodUnit" => "d"
                         ]
@@ -180,6 +208,13 @@ class MedicationDispense extends MedicationDispenseBase
             $payload["location"] = [
                 "reference" => "Location/" . $locationId,
                 "display" => $row['NamaLokasi'] ?? 'Instalasi Farmasi'
+            ];
+        }
+
+        // authorizingPrescription: hanya kirim jika ada MedicationRequest reference
+        if (!empty($reqRef)) {
+            $payload["authorizingPrescription"] = [
+                ["reference" => $reqRef]
             ];
         }
 

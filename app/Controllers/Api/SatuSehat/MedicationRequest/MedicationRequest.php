@@ -7,7 +7,7 @@ class MedicationRequest extends MedicationRequestBase
     public function buildPayload($row, $encounterId)
     {
         // Organization ID from environment or config
-        $orgId = getenv('SATUSEHAT_ORG_ID');
+        $orgId = env('SATUSEHAT_ORG_ID') ?: getenv('SATUSEHAT_ORG_ID') ?: ($_ENV['SATUSEHAT_ORG_ID'] ?? '');
 
         $identifierValue = $row['NoResep'] ?? '123456788';
         $urutan = $row['Urutan'] ?? $row['KodeObat'] ?? '1';
@@ -79,11 +79,39 @@ class MedicationRequest extends MedicationRequestBase
         if ($qtyVal <= 0) {
             $qtyVal = abs($qtyVal) ?: 1;
         }
+        // dispenseRequest.quantity harus integer — SatuSehat RuleNumber 10347
+        $qtyInt = (int)round($qtyVal);
+        if ($qtyInt <= 0) $qtyInt = 1;
 
         $durationRaw = !empty($row['Duration']) ? $row['Duration'] : (!empty($row['JumlahHari']) ? $row['JumlahHari'] : 1);
         $durationVal = floatval($durationRaw);
         if ($durationVal <= 0) {
             $durationVal = abs($durationVal) ?: 1;
+        }
+        // dispenseRequest.expectedSupplyDuration harus integer — SatuSehat RuleNumber 10347
+        $durationInt = (int)round($durationVal);
+        if ($durationInt <= 0) $durationInt = 1;
+
+        // Tentukan category berdasarkan jenis kunjungan (sama dengan MedicationDispense)
+        // - RJ bukan poli 30 → outpatient
+        // - IGD (KdPoli=30) atau Rawat Inap → cek ObatPulang: 1=discharge, 0=inpatient
+        $kdTuju      = strtoupper(trim($row['KdTuju'] ?? 'RJ'));
+        $kdPoli      = trim($row['KdPoli'] ?? '');
+        $isIGD       = ($kdPoli === '30');
+        $isRawatInap = ($kdTuju !== 'RJ');
+
+        if (!$isIGD && !$isRawatInap) {
+            $requestCategory     = 'outpatient';
+            $requestCategoryDisp = 'Outpatient';
+        } else {
+            $obatPulang = !empty($row['ObatPulang']) && $row['ObatPulang'] == 1;
+            if ($obatPulang) {
+                $requestCategory     = 'discharge';
+                $requestCategoryDisp = 'Discharge';
+            } else {
+                $requestCategory     = 'inpatient';
+                $requestCategoryDisp = 'Inpatient';
+            }
         }
 
         $payload = [
@@ -107,8 +135,8 @@ class MedicationRequest extends MedicationRequestBase
                     "coding" => [
                         [
                             "system" => "http://terminology.hl7.org/CodeSystem/medicationrequest-category",
-                            "code" => "outpatient",
-                            "display" => "Outpatient"
+                            "code" => $requestCategory,
+                            "display" => $requestCategoryDisp
                         ]
                     ]
                 ]
@@ -130,45 +158,29 @@ class MedicationRequest extends MedicationRequestBase
                 "reference" => "Practitioner/" . ($row['KdDocSatuSehat'] ?? ''),
                 "display" => $row['NmDoc'] ?? ''
             ],
-            "reasonCode" => [
-                [
-                    "coding" => [
-                        [
-                            "system" => "http://hl7.org/fhir/sid/icd-10",
-                            "code" => (!empty($row['ICD10Code']) ? $row['ICD10Code'] : 'A15.0'),
-                            "display" => (!empty($row['ICD10Display']) ? $row['ICD10Display'] : 'Tuberculosis of lung, confirmed by sputum microscopy with or without culture')
-                        ]
-                    ]
-                ]
-            ],
-            "courseOfTherapyType" => [
-                "coding" => [
-                    [
-                        "system" => "http://terminology.hl7.org/CodeSystem/medicationrequest-course-of-therapy",
-                        "code" => "continuous",
-                        "display" => "Continuous long term therapy"
-                    ]
-                ]
-            ],
+            // reasonCode: opsional — hanya kirim jika ICD-10 tersedia dari data pasien
+            // Tidak hardcode fallback TB, karena resep bukan selalu untuk TB
+
             "dosageInstruction" => [
                 [
                     "sequence" => 1,
-                    "text" => $row['Signa'] ?? '1 tablet per hari',
-                    "additionalInstruction" => [
-                        [
-                            "coding" => [
-                                [
-                                    "system" => "http://snomed.info/sct",
-                                    "code" => "418190008",
-                                    "display" => "With or after food"
-                                ]
-                            ]
-                        ]
-                    ],
-                    "patientInstruction" => "1 tablet per hari, sesudah makan",
+                    // AturanPakai = instruksi dokter (misal: "3x1"), fallback ke kombinasi Signa1xSigna2
+                    "text" => !empty($row['AturanPakai'])
+                        ? $row['AturanPakai']
+                        : ((!empty($row['Signa1']) && !empty($row['Signa2']))
+                            ? $row['Signa1'] . 'x' . $row['Signa2']
+                            : 'Sesuai petunjuk dokter'),
+                    // patientInstruction: KeteranganPakai atau NoteCaraMinumObat (opsional)
+                    "patientInstruction" => trim(implode('. ', array_filter([
+                        $row['KeteranganPakai'] ?? '',
+                        $row['NoteCaraMinumObat'] ?? '',
+                    ]))) ?: null,
                     "timing" => [
                         "repeat" => [
-                            "frequency" => 1,
+                            // Signa1 = berapa kali sehari (harus integer >= 1)
+                            "frequency" => !empty($row['Signa1']) && is_numeric($row['Signa1']) && (int)$row['Signa1'] >= 1
+                                ? (int)$row['Signa1']
+                                : 1,
                             "period" => 1,
                             "periodUnit" => "d"
                         ]
@@ -216,13 +228,13 @@ class MedicationRequest extends MedicationRequestBase
                 ],
                 "numberOfRepeatsAllowed" => 0,
                 "quantity" => [
-                    "value" => $qtyVal,
+                    "value" => $qtyInt,
                     "unit" => $drugFormCode,
                     "system" => "http://terminology.hl7.org/CodeSystem/v3-orderableDrugForm",
                     "code" => $drugFormCode
                 ],
                 "expectedSupplyDuration" => [
-                    "value" => $durationVal,
+                    "value" => $durationInt,
                     "unit" => "days",
                     "system" => "http://unitsofmeasure.org",
                     "code" => "d"
@@ -232,6 +244,43 @@ class MedicationRequest extends MedicationRequestBase
                 ]
             ]
         ];
+
+        // Hapus patientInstruction jika null (opsional, tidak perlu dikirim jika kosong)
+        if (isset($payload['dosageInstruction'][0]['patientInstruction']) 
+            && $payload['dosageInstruction'][0]['patientInstruction'] === null) {
+            unset($payload['dosageInstruction'][0]['patientInstruction']);
+        }
+
+        // reasonCode: tambahkan hanya jika ICD-10 pasien tersedia (dari data register)
+        $icd10Code = trim($row['KdDiag'] ?? $row['ICD10Code'] ?? $row['KdPenyakit'] ?? '');
+        $icd10Display = trim($row['NmDiag'] ?? $row['ICD10Display'] ?? $row['NmPenyakit'] ?? '');
+        if (!empty($icd10Code)) {
+            $payload['reasonCode'] = [
+                [
+                    "coding" => [
+                        [
+                            "system" => "http://hl7.org/fhir/sid/icd-10",
+                            "code" => $icd10Code,
+                            "display" => $icd10Display ?: $icd10Code,
+                        ]
+                    ]
+                ]
+            ];
+        }
+
+        // courseOfTherapyType: hanya untuk obat kronis (dari tabel HeadApotikKronis/DetailApotikKronis)
+        // IsObatKronis = 1 jika data berasal dari HeadApotikKronis, 0 jika dari HeadApotik biasa
+        if (!empty($row['IsObatKronis']) && $row['IsObatKronis'] == 1) {
+            $payload['courseOfTherapyType'] = [
+                "coding" => [
+                    [
+                        "system" => "http://terminology.hl7.org/CodeSystem/medicationrequest-course-of-therapy",
+                        "code" => "continuous",
+                        "display" => "Continuous long term therapy"
+                    ]
+                ]
+            ];
+        }
 
         return $payload;
     }

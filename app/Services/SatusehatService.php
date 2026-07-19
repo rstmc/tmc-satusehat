@@ -163,6 +163,29 @@ class SatusehatService
             }
 
             if ($res->getStatusCode() >= 400) {
+                 if (is_array($body) && isset($body['resourceType']) && $body['resourceType'] === 'Bundle') {
+                      $errors = [];
+                      if (!empty($body['entry'])) {
+                           foreach ($body['entry'] as $index => $entry) {
+                                $entryResponse = $entry['response'] ?? null;
+                                if ($entryResponse && isset($entryResponse['status']) && (int)$entryResponse['status'] >= 400) {
+                                     $outcome = $entryResponse['outcome'] ?? null;
+                                     $resourceType = $bundlePayload['entry'][$index]['resource']['resourceType'] ?? 'UnknownResource';
+                                     $diagnostics = 'Unknown error';
+                                     if ($outcome && isset($outcome['issue'])) {
+                                          $issues = array_map(function($issue) {
+                                               return $issue['diagnostics'] ?? $issue['details']['text'] ?? 'Unknown error';
+                                          }, $outcome['issue']);
+                                          $diagnostics = implode(', ', $issues);
+                                     }
+                                     $errors[] = "[{$resourceType}]: {$entryResponse['status']} - {$diagnostics}";
+                                }
+                           }
+                      }
+                      if (!empty($errors)) {
+                           throw new \Exception("Satusehat Bundle Error: " . implode("; ", $errors));
+                      }
+                 }
                  throw new \Exception("HTTP Error " . $res->getStatusCode() . ": " . $res->getBody());
             }
 
