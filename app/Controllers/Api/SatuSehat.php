@@ -1250,6 +1250,47 @@ class SatuSehat extends BaseController
         } catch (\Exception $e) {
             $msg = $e->getMessage();
 
+            // Intercept 412 Precondition Failed (Duplikasi data)
+            // Format pesan error: "[ResourceType]: 412 - Precondition Failed"
+            if (stripos($msg, '412') !== false) {
+                // Cari resource type dan parameter identifier dari bundle payload yang dikirim
+                // Kita cari entry mana yang bernilai conditional PUT (yang memiliki identifier=)
+                $cleanedUp = false;
+                foreach ($entries as $entry) {
+                    $url = $entry['request']['url'] ?? '';
+                    if (strpos($url, '?identifier=') !== false) {
+                        $parts = explode('?identifier=', $url);
+                        $resourceType = $parts[0];
+                        $identifierQuery = $parts[1] ?? '';
+                        
+                        if ($resourceType && $identifierQuery) {
+                            try {
+                                // 1. Cari resource duplikat di kemkes
+                                $searchRes = $this->service->get($resourceType, ['identifier' => urldecode($identifierQuery)]);
+                                if (isset($searchRes['entry']) && is_array($searchRes['entry']) && count($searchRes['entry']) > 1) {
+                                    // Lebih dari 1 match! Hapus salah satu agar menyisakan tepat satu resource
+                                    // Kita keep entry pertama, dan hapus entry sisanya
+                                    for ($i = 1; $i < count($searchRes['entry']); $i++) {
+                                        $dupId = $searchRes['entry'][$i]['resource']['id'] ?? null;
+                                        if ($dupId) {
+                                            $this->service->delete($resourceType, $dupId);
+                                        }
+                                    }
+                                    $cleanedUp = true;
+                                }
+                            } catch (\Exception $cleanEx) {
+                                // Abaikan error cleanup agar tidak menghalangi resource lainnya
+                            }
+                        }
+                    }
+                }
+
+                // Jika berhasil membersihkan duplikat, lakukan retry otomatis
+                if ($cleanedUp) {
+                    return $this->processRegnoBundle($row, $skippedKfas);
+                }
+            }
+
             // Bypass Rule 20002: Kasus di mana bundle gagal ("invalid code") tapi API Kemkes 
             // men-save parsial (tanpa roll-back) Encounter/Goal, menyebabkan push berikutnya 
             // selalu tertolak sebagai duplikat oleh validator, sedangkan API GET Encounter 

@@ -235,6 +235,37 @@ class SatusehatService
         }
     }
 
+    public function delete(string $resource, string $id): array
+    {
+        $token = $this->token();
+        
+        try {
+            $res = $this->client->delete(
+                getenv('SATUSEHAT_BASE_URL') . "/fhir-r4/v1/{$resource}/{$id}",
+                [
+                    'headers' => [
+                        'Authorization' => "Bearer {$token}",
+                    ],
+                    'http_errors' => false,
+                    'timeout' => (int)(getenv('SATUSEHAT_TIMEOUT') ?: 10),
+                    'connect_timeout' => (int)(getenv('SATUSEHAT_CONNECT_TIMEOUT') ?: 3),
+                ]
+            );
+
+            $body = json_decode($res->getBody(), true) ?: [];
+            
+            if ($res->getStatusCode() >= 400) {
+                 throw new \Exception("HTTP Error " . $res->getStatusCode() . " on delete: " . $res->getBody());
+            }
+
+            return $body;
+
+        } catch (\Throwable $e) {
+            throw $e;
+        }
+    }
+
+
     public function formatIndonesianDate($dateStr)
     {
         if (empty($dateStr)) return '';
