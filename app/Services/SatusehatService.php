@@ -78,7 +78,15 @@ class SatusehatService
                  $issues = array_map(function($issue) {
                     return $issue['diagnostics'] ?? $issue['details']['text'] ?? 'Unknown error';
                  }, $body['issue'] ?? []);
-                 throw new \Exception("Satusehat Error: " . implode(", ", $issues));
+                 $errMessage = implode(", ", $issues);
+                 
+                 // Jika error karena search kriteria kurang spesifik, coba tambahkan filter _count=1 jika belum ada
+                 if (stripos($errMessage, 'search criteria are not selective enough') !== false && !isset($query['_count'])) {
+                     $query['_count'] = 1;
+                     return $this->get($resource, $query);
+                 }
+                 
+                 throw new \Exception("Satusehat Error: " . $errMessage);
             }
 
             if ($res->getStatusCode() >= 400) {
