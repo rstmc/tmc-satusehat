@@ -191,7 +191,7 @@ class SatuSehat extends BaseController
             '12' => ['code' => '408467006', 'display' => 'Dermatology service'],
             '13' => ['code' => '408468001', 'display' => 'Neurosurgical service'],
             '14' => ['code' => '408471009', 'display' => 'Orthopedic service'],
-            '15' => ['code' => '408471009', 'display' => 'Psychiatry service'],
+            '15' => ['code' => '408460008', 'display' => 'Psychiatry service'],
             '16' => ['code' => '722163007', 'display' => 'Pediatric dental service'],
             '17' => ['code' => '408444009', 'display' => 'Dental service'],
             '18' => ['code' => '408450007', 'display' => 'Laboratory medicine service'],
@@ -210,7 +210,7 @@ class SatuSehat extends BaseController
             '41' => ['code' => '394609007', 'display' => 'Surgical service'],
             '42' => ['code' => '408443003', 'display' => 'General medical service'],
             '43' => ['code' => '408443003', 'display' => 'General medical service'],
-            '44' => ['code' => '408461008', 'display' => 'Tuberculosis service'],
+            '44' => ['code' => '722174002', 'display' => 'Pulmonary medicine service'],
             '46' => ['code' => '408472002', 'display' => 'Maternal and child health service'],
             '47' => ['code' => '394602003', 'display' => 'Rehabilitation medicine'],
             '48' => ['code' => '408462001', 'display' => 'Nutrition service'],
@@ -1124,19 +1124,25 @@ class SatuSehat extends BaseController
             ];
         }
 
-        // Ganti POST + ifNoneExist → conditional PUT untuk resource yang punya identifier.
-        // PUT ResourceType?identifier=system|value:
-        //   - Jika tidak ada match → create baru (201)
-        //   - Jika ada tepat 1 match → update (200)
-        //   - Jika ada >1 match → 412 (data sudah terlanjur duplikat di server, perlu cleanup manual)
-        // Resource tanpa identifier tetap POST biasa (tidak ada cara identify duplikat).
+        // Gunakan POST + ifNoneExist untuk resource yang punya identifier.
+        // ifNoneExist: "hanya buat jika tidak ada resource dengan identifier ini"
+        //   - Jika belum ada match → create baru (201)
+        //   - Jika sudah ada match → skip/return existing (200)
+        // CATATAN: Tidak menggunakan conditional PUT karena SatuSehat mengembalikan
+        // "search criteria are not selective enough" saat memproses bundle transaction.
+        // Resource tanpa identifier tetap POST biasa.
         foreach ($entries as &$entry) {
             if (isset($entry['request']['method']) && $entry['request']['method'] === 'POST') {
                 $payload = $entry['resource'] ?? [];
                 $resourceType = $payload['resourceType'] ?? ($entry['request']['url'] ?? null);
 
-                // Encounter selalu POST (conditional PUT Encounter tidak didukung SatuSehat)
+                // Encounter & Medication dilewati (sudah punya logikanya sendiri)
                 if ($resourceType === 'Encounter' || $resourceType === 'Medication') {
+                    continue;
+                }
+
+                // Jika entry sudah punya ifNoneExist, biarkan saja
+                if (isset($entry['request']['ifNoneExist'])) {
                     continue;
                 }
 
@@ -1161,11 +1167,10 @@ class SatuSehat extends BaseController
                 }
 
                 if ($identifierSystem && $identifierValue) {
-                    // Ganti ke conditional PUT
-                    $entry['request']['method'] = 'PUT';
-                    $entry['request']['url']    = $resourceType . '?identifier=' . $identifierSystem . '|' . urlencode($identifierValue);
-                    // Hapus ifNoneExist jika ada (tidak relevan untuk PUT)
-                    unset($entry['request']['ifNoneExist']);
+                    // Gunakan POST + ifNoneExist (bukan conditional PUT)
+                    // SatuSehat tidak mendukung conditional PUT dalam bundle transaction
+                    // dengan baik, menyebabkan "search criteria are not selective enough"
+                    $entry['request']['ifNoneExist'] = 'identifier=' . $identifierSystem . '|' . $identifierValue;
                 }
             }
         }
