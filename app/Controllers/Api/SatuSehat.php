@@ -459,6 +459,7 @@ class SatuSehat extends BaseController
             try {
                 $orgId = $this->getOrgId();
                 $encRes = $this->service->get('Encounter', [
+                    'subject'    => $row['IHSSatuSehat'],
                     'identifier' => 'http://sys-ids.kemkes.go.id/encounter/' . $orgId . '|' . $row['Regno']
                 ]);
 
@@ -1072,7 +1073,9 @@ class SatuSehat extends BaseController
                 $immData = array_merge($row, $item);
                 $immData['VaccineCode'] = $kfaCode;
                 $immData['VaccineDisplay'] = $display;
-                $immData['VaccineSystem'] = 'http://sys-ids.kemkes.go.id/kfa';
+                $immData['VaccineSystem'] = (strpos($kfaCode, 'VG') === 0)
+                    ? 'http://terminology.kemkes.go.id/CodeSystem/vaccine'
+                    : 'http://sys-ids.kemkes.go.id/kfa';
 
                 if (method_exists($immController, 'buildPayload')) {
                     $immPayload = $immController->buildPayload($immData, $encounterId);
@@ -1278,7 +1281,11 @@ class SatuSehat extends BaseController
                     if ($resourceType && $identifierQuery) {
                         try {
                             // 1. Cari resource duplikat di kemkes
-                            $searchRes = $this->service->get($resourceType, ['identifier' => urldecode($identifierQuery)]);
+                            $queryParams = ['identifier' => urldecode($identifierQuery)];
+                            if (!empty($row['IHSSatuSehat'])) {
+                                $queryParams['subject'] = $row['IHSSatuSehat'];
+                            }
+                            $searchRes = $this->service->get($resourceType, $queryParams);
                             if (isset($searchRes['entry']) && is_array($searchRes['entry']) && count($searchRes['entry']) > 0) {
                                 // Jika ini Encounter dan ID belum tersimpan di local DB, update local DB
                                 if ($resourceType === 'Encounter') {
