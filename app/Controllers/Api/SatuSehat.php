@@ -1348,11 +1348,8 @@ class SatuSehat extends BaseController
 
                     if ($resourceType && $identifierQuery) {
                         try {
-                            // 1. Cari resource duplikat di kemkes
+                            // 1. Cari resource duplikat di kemkes (hanya gunakan identifier)
                             $queryParams = ['identifier' => urldecode($identifierQuery)];
-                            if (!empty($row['IHSSatuSehat']) && $resourceType !== 'Medication' && $resourceType !== 'Organization') {
-                                $queryParams['subject'] = $row['IHSSatuSehat'];
-                            }
                             $searchRes = $this->service->get($resourceType, $queryParams);
                             if (isset($searchRes['entry']) && is_array($searchRes['entry']) && count($searchRes['entry']) > 0) {
                                 // Jika ini Encounter dan ID belum tersimpan di local DB, update local DB
