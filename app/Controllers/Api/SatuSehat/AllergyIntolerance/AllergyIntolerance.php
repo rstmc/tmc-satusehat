@@ -46,7 +46,8 @@ class AllergyIntolerance extends AllergyIntoleranceBase
         // Since we don't have a specific allergy ID, we might generate one or use a placeholder
         // Using Regno + '-allergy-' + index or similar might be better if multiple allergies
         $regNo = $row['RegNo'] ?? $row['Regno'] ?? 'Unknown';
-        $identifierValue = $regNo . '-allergy-' . time();
+        $allergenCode = $row['KodeAlergi'] ?? $row['AllergyCode'] ?? $row['SubstanceCode'] ?? 'unknown';
+        $identifierValue = $regNo . '-allergy-' . $allergenCode;
 
         // Recorded Date
         $regDate = $row['RegDate'] ?? $row['Regdate'] ?? date('Y-m-d');

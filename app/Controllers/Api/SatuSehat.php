@@ -430,8 +430,17 @@ class SatuSehat extends BaseController
         );
     }
 
-    private function processRegnoBundle($row, $skippedKfas = [])
+    private function processRegnoBundle($row, $skippedKfas = [], int $retryCount = 0)
     {
+        if ($retryCount >= 3) {
+            log_message('error', "processRegnoBundle reached max retries (3) for Regno " . ($row['Regno'] ?? 'UNKNOWN'));
+            return [
+                'regno'   => $row['Regno'] ?? 'UNKNOWN',
+                'status'  => 'error',
+                'message' => 'Max retries (3) reached during bundle recovery.',
+            ];
+        }
+
         // Sanitize missing Practitioner IDs
         if (empty(trim($row['KdDocSatuSehat'] ?? '')))
             $row['KdDocSatuSehat'] = '';
@@ -458,18 +467,29 @@ class SatuSehat extends BaseController
         if (!$alreadySentEncounterId || $alreadySentEncounterId === 'PENDING-SYNC') {
             try {
                 $orgId = $this->getOrgId();
-                $encRes = $this->service->get('Encounter', [
-                    'identifier' => 'http://sys-ids.kemkes.go.id/encounter/' . $orgId . '|' . $row['Regno']
-                ]);
+                $encIdentifier = 'http://sys-ids.kemkes.go.id/encounter/' . $orgId . '|' . $row['Regno'];
+                
+                // Cari Encounter di Kemkes menggunakan helper pencarian ganda (subject & identifier)
+                $matchedEncounters = $this->findMatchingResourceOnKemkes('Encounter', $encIdentifier, $row);
 
                 $foundId = null;
-                if (isset($encRes['entry']) && is_array($encRes['entry']) && count($encRes['entry']) > 0) {
-                    $foundId = $encRes['entry'][0]['resource']['id'] ?? null;
+                if (!empty($matchedEncounters)) {
+                    $foundId = $matchedEncounters[0]['resource']['id'] ?? null;
+
+                    // Hapus duplikat Encounter ekstra jika ada >1 di Kemkes
+                    if (count($matchedEncounters) > 1) {
+                        for ($i = 1; $i < count($matchedEncounters); $i++) {
+                            $dupId = $matchedEncounters[$i]['resource']['id'] ?? null;
+                            if ($dupId) {
+                                try { $this->service->delete('Encounter', $dupId); } catch (\Exception $delEx) {}
+                            }
+                        }
+                    }
                 }
 
                 if (!empty($foundId)) {
                     $alreadySentEncounterId = $foundId;
-                    // Simpan ID yang sudah ketemu ke database lokal bapak
+                    // Simpan ID yang sudah ketemu ke database lokal
                     $registerModel = new \App\Models\Register();
                     $registerModel->updateEncounter($row['Regno'], $row['Medrec'], $alreadySentEncounterId);
                 } else if ($alreadySentEncounterId === 'PENDING-SYNC') {
@@ -482,6 +502,7 @@ class SatuSehat extends BaseController
                     ];
                 }
             } catch (\Exception $e) {
+                log_message('error', 'Check Encounter error for Regno ' . $row['Regno'] . ': ' . $e->getMessage());
             }
         }
 
@@ -527,7 +548,11 @@ class SatuSehat extends BaseController
             $entries[] = [
                 'fullUrl' => $encounterFullUrl,
                 'resource' => $this->buildEncounterPayload($row),
-                'request' => ['method' => 'POST', 'url' => 'Encounter'],
+                'request' => [
+                    'method' => 'POST',
+                    'url' => 'Encounter',
+                    'ifNoneExist' => 'identifier=http://sys-ids.kemkes.go.id/encounter/' . $this->getOrgId() . '|' . $row['Regno']
+                ],
             ];
             $entryKeys[] = ['type' => 'Encounter', 'subtype' => 'encounter'];
         }
@@ -735,8 +760,13 @@ class SatuSehat extends BaseController
                 continue;
             }
 
-            if (!empty($obatItem['Medication_id_satu_sehat'])) {
-                $medUuidsByKode[$kodeDeduplikasi] = $obatItem['Medication_id_satu_sehat'];
+            $existingMedId = !empty($obatItem['Medication_id_satu_sehat'])
+                ? $obatItem['Medication_id_satu_sehat']
+                : $this->resolveMedicationProactively($kodeDeduplikasi, $obatItem['KodeObat'] ?? null);
+
+            if (!empty($existingMedId)) {
+                // Medication sudah ada di DB lokal atau Kemkes -> gunakan ID aslinya, tidak perlu POST di bundle
+                $medUuidsByKode[$kodeDeduplikasi] = $existingMedId;
             } else {
                 $medUuid = 'urn:uuid:' . $this->generateUuid();
                 $medUuidsByKode[$kodeDeduplikasi] = $medUuid;
@@ -749,13 +779,17 @@ class SatuSehat extends BaseController
                     $medPayload = $medicationController->buildPayload($tempObat, $encounterId);
                     if ($medPayload) {
                         $orgId = $this->getOrgId();
+                        // ifNoneExist identifier harus stabil (tidak random) agar match saat push ulang.
+                        // Gunakan kfa code (kodeDeduplikasi) sebagai nilai identifier
+                        $medIdentifierValue = $kodeDeduplikasi;
+                        $medPayload['identifier'][0]['value'] = $medIdentifierValue;
                         $entries[] = [
                             "fullUrl" => $medUuid,
                             "resource" => $medPayload,
                             "request" => [
                                 "method" => "POST",
                                 "url" => "Medication",
-                                "ifNoneExist" => "identifier=http://sys-ids.kemkes.go.id/medication/" . $orgId . "|" . $tempObat['KodeObat']
+                                "ifNoneExist" => "identifier=http://sys-ids.kemkes.go.id/medication/" . $orgId . "|" . $medIdentifierValue
                             ]
                         ];
                         $entryKeys[] = ['type' => 'Medication', 'subtype' => 'medication', 'local_id' => $obatItem['KodeObat'] ?? ''];
@@ -1146,12 +1180,105 @@ class SatuSehat extends BaseController
                     continue;
                 }
 
-                $identifierValue = null;
-                $identifierSystem = null;
+                $identifiers = null;
+                if (isset($payload['identifier'])) {
+                    // Beberapa resource (Composition) pakai object tunggal, bukan array
+                    if (is_array($payload['identifier']) && isset($payload['identifier']['system'])) {
+                        // Single object → bungkus jadi array agar loop berjalan
+                        $identifiers = [$payload['identifier']];
+                    } elseif (is_array($payload['identifier'])) {
+                        $identifiers = $payload['identifier'];
+                    }
+                }
 
-                if (isset($payload['identifier']) && is_array($payload['identifier'])) {
+                // Auto-inject identifier untuk resource yang tidak punya identifier bawaan
+                // agar ifNoneExist bisa bekerja dan mencegah 412 pada push ulang.
+                if (!$identifiers && !empty($row['Regno'])) {
+                    $orgId = $this->getOrgId();
+                    $subtype = $entryKeys[array_search($entry, $entries)]['subtype']
+                        ?? ($resourceType ? strtolower($resourceType) : 'resource');
+                    $autoSystem = null;
+                    $autoValue  = null;
+
+                    switch ($resourceType) {
+                        case 'Observation':
+                            $loincCode = $payload['code']['coding'][0]['code'] ?? 'obs';
+                            $autoSystem = 'http://sys-ids.kemkes.go.id/observation/' . $orgId;
+                            $autoValue  = $row['Regno'] . '-obs-' . $loincCode;
+                            break;
+                        case 'CarePlan':
+                            $cpCategory = $payload['category'][0]['coding'][0]['code'] ?? 'plan';
+                            $autoSystem = 'http://sys-ids.kemkes.go.id/careplan/' . $orgId;
+                            $autoValue  = $row['Regno'] . '-careplan-' . $cpCategory;
+                            break;
+                        case 'ClinicalImpression':
+                            $autoSystem = 'http://sys-ids.kemkes.go.id/clinicalimpression/' . $orgId;
+                            $autoValue  = $row['Regno'] . '-clinicalimpression';
+                            break;
+                        case 'Procedure':
+                            $procCode = $payload['code']['coding'][0]['code'] ?? 'proc';
+                            $autoSystem = 'http://sys-ids.kemkes.go.id/procedure/' . $orgId;
+                            $autoValue  = $row['Regno'] . '-procedure-' . $procCode;
+                            break;
+                        case 'ServiceRequest':
+                            $srCode = $payload['code']['coding'][0]['code'] ?? 'sr';
+                            $autoSystem = 'http://sys-ids.kemkes.go.id/servicerequest/' . $orgId;
+                            $autoValue  = $row['Regno'] . '-sr-' . $srCode;
+                            break;
+                        case 'Goal':
+                            $autoSystem = 'http://sys-ids.kemkes.go.id/goal/' . $orgId;
+                            $autoValue  = $row['Regno'] . '-goal';
+                            break;
+                        case 'MedicationRequest':
+                            $medRef = str_replace('Medication/', '', $payload['medicationReference']['reference'] ?? 'med');
+                            $autoSystem = 'http://sys-ids.kemkes.go.id/prescription/' . $orgId;
+                            $autoValue  = $row['Regno'] . '-medreq-' . $medRef;
+                            break;
+                        case 'MedicationDispense':
+                            $medRef = str_replace('Medication/', '', $payload['medicationReference']['reference'] ?? 'med');
+                            $autoSystem = 'http://sys-ids.kemkes.go.id/medicationdispense/' . $orgId;
+                            $autoValue  = $row['Regno'] . '-meddisp-' . $medRef;
+                            break;
+                        case 'MedicationStatement':
+                            $medRef = str_replace('Medication/', '', $payload['medicationReference']['reference'] ?? 'med');
+                            $autoSystem = 'http://sys-ids.kemkes.go.id/medicationstatement/' . $orgId;
+                            $autoValue  = $row['Regno'] . '-medstmt-' . $medRef;
+                            break;
+                        case 'Immunization':
+                            $immCode = $payload['vaccineCode']['coding'][0]['code'] ?? 'imm';
+                            $autoSystem = 'http://sys-ids.kemkes.go.id/immunization/' . $orgId;
+                            $autoValue  = $row['Regno'] . '-imm-' . $immCode;
+                            break;
+                        case 'AllergyIntolerance':
+                            $algCode = $payload['code']['coding'][0]['code'] ?? 'allergy';
+                            $autoSystem = 'http://sys-ids.kemkes.go.id/allergyintolerance/' . $orgId;
+                            $autoValue  = $row['Regno'] . '-allergy-' . $algCode;
+                            break;
+                        case 'DiagnosticReport':
+                            $diagCode = $payload['code']['coding'][0]['code'] ?? 'diag';
+                            $autoSystem = 'http://sys-ids.kemkes.go.id/diagnosticreport/' . $orgId;
+                            $autoValue  = $row['Regno'] . '-diagreport-' . $diagCode;
+                            break;
+                        case 'Composition':
+                            $autoSystem = 'http://sys-ids.kemkes.go.id/composition/' . $orgId;
+                            $autoValue  = $row['Regno'] . '-composition';
+                            break;
+                    }
+
+                    if ($autoSystem && $autoValue) {
+                        $entry['resource']['identifier'] = [
+                            ['system' => $autoSystem, 'value' => $autoValue]
+                        ];
+                        $identifiers = [['system' => $autoSystem, 'value' => $autoValue]];
+                    }
+                }
+
+                $identifierSystem = null;
+                $identifierValue  = null;
+
+                if ($identifiers) {
                     // Prioritaskan identifier prescription-item untuk resource obat
-                    foreach ($payload['identifier'] as $idObj) {
+                    foreach ($identifiers as $idObj) {
                         if (isset($idObj['system']) && isset($idObj['value'])) {
                             if (strpos($idObj['system'], 'prescription-item') !== false) {
                                 $identifierSystem = $idObj['system'];
@@ -1167,9 +1294,7 @@ class SatuSehat extends BaseController
                 }
 
                 if ($identifierSystem && $identifierValue) {
-                    // Gunakan POST + ifNoneExist (bukan conditional PUT)
-                    // SatuSehat tidak mendukung conditional PUT dalam bundle transaction
-                    // dengan baik, menyebabkan "search criteria are not selective enough"
+                    // Gunakan POST + ifNoneExist (HANYA identifier= yang diizinkan oleh validator bundle SATUSEHAT)
                     $entry['request']['ifNoneExist'] = 'identifier=' . $identifierSystem . '|' . $identifierValue;
                 }
             }
@@ -1255,9 +1380,12 @@ class SatuSehat extends BaseController
         } catch (\Exception $e) {
             $msg = $e->getMessage();
 
-            // Intercept 412 Precondition Failed (Duplikasi data / match existing)
-            // Format pesan error: "[ResourceType]: 412 - Precondition Failed"
-            if (stripos($msg, '412') !== false) {
+            // Intercept 412 Precondition Failed / "search criteria are not selective enough" (Duplikasi data >1 di Kemkes)
+            if (
+                stripos($msg, '412') !== false 
+                || stripos($msg, 'not selective') !== false 
+                || stripos($msg, 'selective enough') !== false
+            ) {
                 // Cari resource type dan parameter identifier dari bundle payload yang dikirim
                 $cleanedUp = false;
                 foreach ($entries as $entry) {
@@ -1273,17 +1401,24 @@ class SatuSehat extends BaseController
                         $parts = explode('?identifier=', $url);
                         $resourceType = $parts[0];
                         $identifierQuery = $parts[1] ?? '';
+                    } elseif (!empty($entry['resource']['identifier'])) {
+                        $rawIds = $entry['resource']['identifier'];
+                        $firstId = isset($rawIds[0]) && is_array($rawIds[0]) ? $rawIds[0] : (is_array($rawIds) ? $rawIds : null);
+                        if (!empty($firstId['system']) && !empty($firstId['value'])) {
+                            $identifierQuery = $firstId['system'] . '|' . $firstId['value'];
+                        }
                     }
 
                     if ($resourceType && $identifierQuery) {
                         try {
-                            // 1. Cari resource duplikat di kemkes
-                            $searchRes = $this->service->get($resourceType, ['identifier' => urldecode($identifierQuery)]);
-                            if (isset($searchRes['entry']) && is_array($searchRes['entry']) && count($searchRes['entry']) > 0) {
-                                // Jika ini Encounter dan ID belum tersimpan di local DB, update local DB
+                            // 1. Cari resource duplikat di kemkes menggunakan strategi pencarian ganda (subject & identifier)
+                            $matchedEntries = $this->findMatchingResourceOnKemkes($resourceType, $identifierQuery, $row);
+
+                            if (!empty($matchedEntries)) {
+                                // Jika ini Encounter dan ID ada di Kemkes, update DB lokal & set flag cleanedUp untuk retry
                                 if ($resourceType === 'Encounter') {
-                                    $existingEncId = $searchRes['entry'][0]['resource']['id'] ?? null;
-                                    if ($existingEncId && (empty($row['EcounterSatuSehat']) || $row['EcounterSatuSehat'] === 'PENDING-SYNC')) {
+                                    $existingEncId = $matchedEntries[0]['resource']['id'] ?? null;
+                                    if ($existingEncId) {
                                         $registerModel = new Register();
                                         $registerModel->updateEncounter($row['Regno'], $row['Medrec'], $existingEncId);
                                         $row['EcounterSatuSehat'] = $existingEncId;
@@ -1292,10 +1427,9 @@ class SatuSehat extends BaseController
                                 }
 
                                 // Jika lebih dari 1 match! Hapus salah satu agar menyisakan tepat satu resource
-                                // Kita keep entry pertama, dan hapus entry sisanya
-                                if (count($searchRes['entry']) > 1) {
-                                    for ($i = 1; $i < count($searchRes['entry']); $i++) {
-                                        $dupId = $searchRes['entry'][$i]['resource']['id'] ?? null;
+                                if (count($matchedEntries) > 1) {
+                                    for ($i = 1; $i < count($matchedEntries); $i++) {
+                                        $dupId = $matchedEntries[$i]['resource']['id'] ?? null;
                                         if ($dupId) {
                                             $this->service->delete($resourceType, $dupId);
                                         }
@@ -1304,14 +1438,14 @@ class SatuSehat extends BaseController
                                 }
                             }
                         } catch (\Exception $cleanEx) {
-                            // Abaikan error cleanup agar tidak menghalangi resource lainnya
+                            log_message('error', "Cleanup search error for {$resourceType} ({$identifierQuery}): " . $cleanEx->getMessage());
                         }
                     }
                 }
 
                 // Jika berhasil membersihkan duplikat / menyelaraskan ID, lakukan retry otomatis
                 if ($cleanedUp) {
-                    return $this->processRegnoBundle($row, $skippedKfas);
+                    return $this->processRegnoBundle($row, $skippedKfas, $retryCount + 1);
                 }
             }
 
@@ -1319,20 +1453,38 @@ class SatuSehat extends BaseController
             // men-save parsial (tanpa roll-back) Encounter/Goal, menyebabkan push berikutnya 
             // selalu tertolak sebagai duplikat oleh validator, sedangkan API GET Encounter 
             // belum terupdate dari ElasticSearch (lag).
-            if (
-                (stripos($msg, '20002') !== false || stripos($msg, 'RuleNumber') !== false)
-                && (stripos($msg, 'Encounter') !== false || stripos($msg, 'Encounter') !== false)
-            ) {
-                // Update local DB to PENDING-SYNC
-                $registerModel = new Register();
-                $registerModel->updateEncounter($row['Regno'], $row['Medrec'], 'PENDING-SYNC');
+            // Bug Kemkes 20002: resource sudah ada di server tapi dikembalikan sebagai error "Found duplicate"
+            // bukannya 200 OK (ifNoneExist seharusnya skip bukan error).
+            if (stripos($msg, '20002') !== false || preg_match('/Found duplicate:/i', $msg)) {
+                if (stripos($msg, 'Encounter') !== false) {
+                    // Khusus Encounter → PENDING-SYNC (tunggu indeks Kemkes)
+                    $registerModel = new Register();
+                    $registerModel->updateEncounter($row['Regno'], $row['Medrec'], 'PENDING-SYNC');
 
-                return [
-                    'regno' => $row['Regno'],
-                    'status' => 'success',
-                    'message' => 'Status PENDING-SYNC. Menunggu server Kemkes selesai meng-indeks data (Bypass Bug 20002).',
-                    'bundle_response' => 'PENDING-SYNC'
-                ];
+                    return [
+                        'regno'           => $row['Regno'],
+                        'status'          => 'success',
+                        'message'         => 'Status PENDING-SYNC. Menunggu server Kemkes selesai meng-indeks data (Bypass Bug 20002).',
+                        'bundle_response' => 'PENDING-SYNC'
+                    ];
+                } else {
+                    // Resource lain (Goal, CarePlan, ClinicalImpression, dst.) → sudah ada di Kemkes, skip
+                    return [
+                        'regno'           => $row['Regno'],
+                        'status'          => 'success',
+                        'message'         => 'Data sudah terkirim sebelumnya (Bypass Bug 20002 – duplicate resource).',
+                        'bundle_response' => 'ALREADY_SENT'
+                    ];
+                }
+            }
+
+            // Automatic 429 rate limit retry
+            if (stripos($msg, '429') !== false || stripos($msg, 'QuotaViolation') !== false || stripos($msg, 'Rate limit') !== false) {
+                if ($retryCount < 3) {
+                    log_message('warning', "Rate limit (429) hit for Regno " . ($row['Regno'] ?? '') . ". Retrying in 2s (Attempt " . ($retryCount + 1) . ")...");
+                    sleep(2);
+                    return $this->processRegnoBundle($row, $skippedKfas, $retryCount + 1);
+                }
             }
 
             // Automatic KFA bypass: Catch "Code not found: '93026854' in system" and retry bundle without it
@@ -1340,7 +1492,7 @@ class SatuSehat extends BaseController
                 $invalidKfa = trim($matches[1]);
                 if (!empty($invalidKfa) && !in_array($invalidKfa, $skippedKfas)) {
                     $skippedKfas[] = $invalidKfa;
-                    return $this->processRegnoBundle($row, $skippedKfas);
+                    return $this->processRegnoBundle($row, $skippedKfas, $retryCount + 1);
                 }
             }
 
@@ -1490,6 +1642,161 @@ class SatuSehat extends BaseController
                 'message' => $e->getMessage()
             ])->setStatusCode(400);
         }
+    }
+
+    private function findMatchingResourceOnKemkes(string $resourceType, string $identifierQuery, array $row): array
+    {
+        $entries = [];
+
+        // Strategi 1: Cari via subject (pencarian per pasien paling stabil di SATUSEHAT API, tidak pernah 400/not selective)
+        if (!empty($row['IHSSatuSehat']) && !in_array($resourceType, ['Medication', 'Organization'])) {
+            try {
+                $searchRes = $this->service->get($resourceType, ['subject' => $row['IHSSatuSehat'], '_count' => 100]);
+                if (!empty($searchRes['entry']) && is_array($searchRes['entry'])) {
+                    foreach ($searchRes['entry'] as $item) {
+                        $resource = $item['resource'] ?? [];
+                        $identifiers = $resource['identifier'] ?? [];
+                        if (is_array($identifiers)) {
+                            if (isset($identifiers['system'])) {
+                                $identifiers = [$identifiers];
+                            }
+                            foreach ($identifiers as $idObj) {
+                                $val = $idObj['value'] ?? '';
+                                $sys = $idObj['system'] ?? '';
+                                $fullId = $sys !== '' ? ($sys . '|' . $val) : $val;
+
+                                if (
+                                    (!empty($row['Regno']) && $val === $row['Regno']) || 
+                                    (!empty($val) && strpos($identifierQuery, $val) !== false) || 
+                                    $fullId === $identifierQuery
+                                ) {
+                                    $entries[] = $item;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                if (!empty($entries)) {
+                    return $entries;
+                }
+            } catch (\Exception $ex1) {
+                log_message('error', "findMatchingResourceOnKemkes Strategy 1 error for {$resourceType}: " . $ex1->getMessage());
+            }
+        }
+
+        // Strategi 2: Fallback ke identifier murni
+        try {
+            $searchRes = $this->service->get($resourceType, ['identifier' => urldecode($identifierQuery), '_count' => 200]);
+            if (!empty($searchRes['entry']) && is_array($searchRes['entry'])) {
+                return $searchRes['entry'];
+            }
+        } catch (\Exception $ex2) {
+            log_message('error', "findMatchingResourceOnKemkes Strategy 2 error for {$resourceType} ({$identifierQuery}): " . $ex2->getMessage());
+        }
+
+        return [];
+    }
+
+    private function resolveMedicationProactively(string $kfaCode, ?string $localKodeObat = null): ?string
+    {
+        $orgId = $this->getOrgId();
+        if (empty($kfaCode) || empty($orgId)) {
+            return null;
+        }
+
+        $identifierQuery = 'http://sys-ids.kemkes.go.id/medication/' . $orgId . '|' . $kfaCode;
+        $foundId = null;
+
+        try {
+            // Search Kemkes by KFA identifier with high _count limit
+            $searchRes = $this->service->get('Medication', [
+                'identifier' => $identifierQuery,
+                '_count'     => 200
+            ]);
+
+            if (!empty($searchRes['entry']) && is_array($searchRes['entry'])) {
+                $foundId = $searchRes['entry'][0]['resource']['id'] ?? null;
+
+                // Jika terdapat duplikat > 1 di Kemkes, hapus sisa duplikatnya ($i = 1..N)
+                if (count($searchRes['entry']) > 1) {
+                    for ($i = 1; $i < count($searchRes['entry']); $i++) {
+                        $dupId = $searchRes['entry'][$i]['resource']['id'] ?? null;
+                        if ($dupId) {
+                            try {
+                                $this->service->delete('Medication', $dupId);
+                            } catch (\Throwable $t) {
+                                log_message('error', "Failed to delete duplicate Medication {$dupId}: " . $t->getMessage());
+                            }
+                        }
+                    }
+                }
+
+                // Simpan ID valid pertama ke DB lokal jika localKodeObat tersedia
+                if ($foundId && $localKodeObat) {
+                    try {
+                        $obatModel = new \App\Models\MasterObat();
+                        $obatModel->update($localKodeObat, [
+                            'Medication_id_satu_sehat' => $foundId
+                        ]);
+                    } catch (\Throwable $t) {
+                        log_message('error', "Failed to update local MasterObat {$localKodeObat}: " . $t->getMessage());
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            log_message('error', "Proactive Medication resolve error for KFA {$kfaCode}: " . $e->getMessage());
+        }
+
+        return $foundId;
+    }
+
+    /**
+     * Skrip pembersihan massal duplikat Medication di server Kemkes.
+     * GET /api/satusehat/clean-duplicate-medications
+     */
+    public function cleanDuplicateMedications()
+    {
+        $orgId = $this->getOrgId();
+        if (empty($orgId)) {
+            return $this->response->setStatusCode(400)->setJSON([
+                'status' => false,
+                'message' => 'SATUSEHAT_ORG_ID belum terkonfigurasi di env.'
+            ]);
+        }
+
+        $obatModel = new \App\Models\MasterObat();
+        $allObat = $obatModel->select('KdObat, KfaCode, kfa_code, Medication_id_satu_sehat')->findAll();
+
+        $processedKfas = [];
+        $totalCleaned = 0;
+        $details = [];
+
+        foreach ($allObat as $obat) {
+            $kfaCode = trim(!empty($obat['kfa_code']) ? $obat['kfa_code'] : ($obat['KfaCode'] ?? ''));
+            $kdObat  = trim($obat['KdObat'] ?? '');
+
+            if (empty($kfaCode) || isset($processedKfas[$kfaCode])) {
+                continue;
+            }
+            $processedKfas[$kfaCode] = true;
+
+            $foundId = $this->resolveMedicationProactively($kfaCode, $kdObat);
+            if ($foundId) {
+                $details[] = [
+                    'kfa' => $kfaCode,
+                    'medication_id' => $foundId
+                ];
+            }
+            usleep(200000); // Throttling 0.2s delay to prevent hitting SATUSEHAT rate limit quota
+        }
+
+        return $this->response->setJSON([
+            'status' => true,
+            'message' => 'Pembersihan duplikat Medication selesai.',
+            'total_kfa_processed' => count($processedKfas),
+            'details' => $details
+        ]);
     }
 
     private function getOrgId(): string

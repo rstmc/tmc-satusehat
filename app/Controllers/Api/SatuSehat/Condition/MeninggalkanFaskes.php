@@ -6,13 +6,21 @@ class MeninggalkanFaskes extends ConditionBase
 {
     public function buildPayload($row, $encounterId)
     {
+        $orgId = getenv('SATUSEHAT_ORG_ID');
+
         $payload = [
             "resourceType" => "Condition",
+            "identifier" => [
+                [
+                    "system" => "http://sys-ids.kemkes.go.id/condition/" . $orgId,
+                    "value"  => $row['Regno'] . '-meninggalkan-faskes',
+                ]
+            ],
             "clinicalStatus" => [
                 "coding" => [
                     [
-                        "system" => "http://terminology.hl7.org/CodeSystem/condition-clinical",
-                        "code" => "active",
+                        "system"  => "http://terminology.hl7.org/CodeSystem/condition-clinical",
+                        "code"    => "active",
                         "display" => "Active"
                     ]
                 ]
@@ -21,8 +29,8 @@ class MeninggalkanFaskes extends ConditionBase
                 [
                     "coding" => [
                         [
-                            "system" => "http://terminology.hl7.org/CodeSystem/condition-category",
-                            "code" => "encounter-diagnosis",
+                            "system"  => "http://terminology.hl7.org/CodeSystem/condition-category",
+                            "code"    => "encounter-diagnosis",
                             "display" => "Encounter Diagnosis"
                         ]
                     ]
@@ -31,19 +39,19 @@ class MeninggalkanFaskes extends ConditionBase
             "code" => [
                 "coding" => [
                     [
-                        "system" => "http://snomed.info/sct",
-                        "code" => "359746009",
+                        "system"  => "http://snomed.info/sct",
+                        "code"    => "359746009",
                         "display" => "Patient's condition stable"
                     ]
                 ]
             ],
             "subject" => [
                 "reference" => "Patient/" . $row['IHSSatuSehat'],
-                "display" => $row['Firstname']
+                "display"   => $row['Firstname']
             ],
             "encounter" => [
                 "reference" => "Encounter/" . $encounterId,
-                "display" => "Kunjungan " . $row['Firstname']
+                "display"   => "Kunjungan " . $row['Firstname']
             ]
         ];
 

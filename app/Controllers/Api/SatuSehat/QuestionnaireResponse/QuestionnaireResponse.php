@@ -43,6 +43,8 @@ class QuestionnaireResponse extends QuestionnaireResponseBase
 
         $statusKesejahteraan = $ksMapping[$ksInput] ?? 'Pra Sejahtera';
 
+        $orgId = getenv('SATUSEHAT_ORG_ID');
+
         $payload = [
             "resourceType" => "QuestionnaireResponse",
             "questionnaire" => "https://fhir.kemkes.go.id/Questionnaire/Q0002",

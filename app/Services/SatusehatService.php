@@ -49,11 +49,36 @@ class SatusehatService
         return $json['access_token'];
     }
 
+    /**
+     * Helper to execute API requests with automatic exponential backoff retry on HTTP 429 (Rate Limit).
+     */
+    private function executeWithRetry(callable $requestFunc, int $maxRetries = 3)
+    {
+        $attempt = 0;
+        while (true) {
+            $attempt++;
+            try {
+                return $requestFunc();
+            } catch (\Throwable $e) {
+                $msg = $e->getMessage();
+                $isRateLimit = (stripos($msg, '429') !== false || stripos($msg, 'QuotaViolation') !== false || stripos($msg, 'Rate limit') !== false);
+                
+                if ($isRateLimit && $attempt <= $maxRetries) {
+                    $waitTime = $attempt * 2; // 2s, 4s, 6s
+                    log_message('warning', "SATUSEHAT Rate Limit (429) hit. Waiting {$waitTime}s before retry {$attempt}/{$maxRetries}...");
+                    sleep($waitTime);
+                    continue;
+                }
+                throw $e;
+            }
+        }
+    }
+
     public function get(string $resource, array $query = []): array
     {
-        $token = $this->token();
-        
-        try {
+        return $this->executeWithRetry(function () use ($resource, $query) {
+            $token = $this->token();
+            
             $url = getenv('SATUSEHAT_BASE_URL') . "/fhir-r4/v1/{$resource}";
             
             // Append query string if exists
@@ -80,9 +105,9 @@ class SatusehatService
                  }, $body['issue'] ?? []);
                  $errMessage = implode(", ", $issues);
                  
-                 // Jika error karena search kriteria kurang spesifik, coba tambahkan filter _count=1 jika belum ada
+                 // Jika error karena search kriteria kurang spesifik, coba tambahkan filter _count=50 jika belum ada
                  if (stripos($errMessage, 'search criteria are not selective enough') !== false && !isset($query['_count'])) {
-                     $query['_count'] = 1;
+                     $query['_count'] = 50;
                      return $this->get($resource, $query);
                  }
                  
@@ -94,17 +119,14 @@ class SatusehatService
             }
 
             return $body;
-
-        } catch (\Throwable $e) {
-            throw $e;
-        }
+        });
     }
 
     public function post(string $resource, array $payload, array $extraHeaders = []): array
     {
-        $token = $this->token();
-        
-        try {
+        return $this->executeWithRetry(function () use ($resource, $payload, $extraHeaders) {
+            $token = $this->token();
+            
             $headers = array_merge([
                 'Authorization' => "Bearer {$token}",
                 'Content-Type'  => getenv('SATUSEHAT_CONTENT_TYPE') ?: 'application/json',
@@ -135,17 +157,14 @@ class SatusehatService
             }
 
             return $body;
-
-        } catch (\Throwable $e) {
-            throw $e;
-        }
+        });
     }
 
     public function postBundle(array $bundlePayload, array $extraHeaders = []): array
     {
-        $token = $this->token();
-        
-        try {
+        return $this->executeWithRetry(function () use ($bundlePayload, $extraHeaders) {
+            $token = $this->token();
+            
             $headers = array_merge([
                 'Authorization' => "Bearer {$token}",
                 'Content-Type'  => getenv('SATUSEHAT_CONTENT_TYPE') ?: 'application/json',
@@ -168,6 +187,15 @@ class SatusehatService
                     return $issue['diagnostics'] ?? $issue['details']['text'] ?? 'Unknown error';
                  }, $body['issue'] ?? []);
                  throw new \Exception("Satusehat Error: " . implode(", ", $issues));
+            }
+
+            // Kemkes kadang mengembalikan HTTP 200 tetapi body-nya berupa array of rule violations
+            // contoh: [{"ruleNumber":"10024","message":"Code not found: ..."}]
+            if (is_array($body) && !isset($body['resourceType']) && !isset($body['id']) && !isset($body['entry'])) {
+                if (!empty($body) && isset($body[0]['ruleNumber'])) {
+                    $messages = array_map(fn($r) => $r['message'] ?? 'Unknown rule error', $body);
+                    throw new \Exception("Satusehat Error: " . implode(", ", $messages));
+                }
             }
 
             if ($res->getStatusCode() >= 400) {
@@ -198,17 +226,14 @@ class SatusehatService
             }
 
             return $body;
-
-        } catch (\Throwable $e) {
-            throw $e;
-        }
+        });
     }
 
     public function put(string $resource, string $id, array $payload): array
     {
-        $token = $this->token();
-        
-        try {
+        return $this->executeWithRetry(function () use ($resource, $id, $payload) {
+            $token = $this->token();
+            
             $res = $this->client->put(
                 getenv('SATUSEHAT_BASE_URL') . "/fhir-r4/v1/{$resource}/{$id}",
                 [
@@ -237,17 +262,14 @@ class SatusehatService
             }
 
             return $body;
-
-        } catch (\Throwable $e) {
-            throw $e;
-        }
+        });
     }
 
     public function delete(string $resource, string $id): array
     {
-        $token = $this->token();
-        
-        try {
+        return $this->executeWithRetry(function () use ($resource, $id) {
+            $token = $this->token();
+            
             $res = $this->client->delete(
                 getenv('SATUSEHAT_BASE_URL') . "/fhir-r4/v1/{$resource}/{$id}",
                 [
@@ -267,10 +289,7 @@ class SatusehatService
             }
 
             return $body;
-
-        } catch (\Throwable $e) {
-            throw $e;
-        }
+        });
     }
 
 
