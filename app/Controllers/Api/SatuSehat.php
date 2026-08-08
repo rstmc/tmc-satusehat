@@ -1352,10 +1352,10 @@ class SatuSehat extends BaseController
                             $queryParams = ['identifier' => urldecode($identifierQuery)];
                             $searchRes = $this->service->get($resourceType, $queryParams);
                             if (isset($searchRes['entry']) && is_array($searchRes['entry']) && count($searchRes['entry']) > 0) {
-                                // Jika ini Encounter dan ID belum tersimpan di local DB, update local DB
+                                // Jika ini Encounter dan ID ada di Kemkes, update DB lokal & set flag cleanedUp untuk retry
                                 if ($resourceType === 'Encounter') {
                                     $existingEncId = $searchRes['entry'][0]['resource']['id'] ?? null;
-                                    if ($existingEncId && (empty($row['EcounterSatuSehat']) || $row['EcounterSatuSehat'] === 'PENDING-SYNC')) {
+                                    if ($existingEncId) {
                                         $registerModel = new Register();
                                         $registerModel->updateEncounter($row['Regno'], $row['Medrec'], $existingEncId);
                                         $row['EcounterSatuSehat'] = $existingEncId;

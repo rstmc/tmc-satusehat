@@ -80,9 +80,9 @@ class SatusehatService
                  }, $body['issue'] ?? []);
                  $errMessage = implode(", ", $issues);
                  
-                 // Jika error karena search kriteria kurang spesifik, coba tambahkan filter _count=1 jika belum ada
+                 // Jika error karena search kriteria kurang spesifik, coba tambahkan filter _count=50 jika belum ada
                  if (stripos($errMessage, 'search criteria are not selective enough') !== false && !isset($query['_count'])) {
-                     $query['_count'] = 1;
+                     $query['_count'] = 50;
                      return $this->get($resource, $query);
                  }
                  
