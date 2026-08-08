@@ -528,7 +528,11 @@ class SatuSehat extends BaseController
             $entries[] = [
                 'fullUrl' => $encounterFullUrl,
                 'resource' => $this->buildEncounterPayload($row),
-                'request' => ['method' => 'POST', 'url' => 'Encounter'],
+                'request' => [
+                    'method' => 'POST',
+                    'url' => 'Encounter',
+                    'ifNoneExist' => 'identifier=http://sys-ids.kemkes.go.id/encounter/' . $this->getOrgId() . '|' . $row['Regno']
+                ],
             ];
             $entryKeys[] = ['type' => 'Encounter', 'subtype' => 'encounter'];
         }
@@ -1334,6 +1338,12 @@ class SatuSehat extends BaseController
                         $parts = explode('?identifier=', $url);
                         $resourceType = $parts[0];
                         $identifierQuery = $parts[1] ?? '';
+                    } elseif (!empty($entry['resource']['identifier'])) {
+                        $rawIds = $entry['resource']['identifier'];
+                        $firstId = isset($rawIds[0]) && is_array($rawIds[0]) ? $rawIds[0] : (is_array($rawIds) ? $rawIds : null);
+                        if (!empty($firstId['system']) && !empty($firstId['value'])) {
+                            $identifierQuery = $firstId['system'] . '|' . $firstId['value'];
+                        }
                     }
 
                     if ($resourceType && $identifierQuery) {
