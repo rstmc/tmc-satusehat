@@ -1478,6 +1478,15 @@ class SatuSehat extends BaseController
                 }
             }
 
+            // Automatic 429 rate limit retry
+            if (stripos($msg, '429') !== false || stripos($msg, 'QuotaViolation') !== false || stripos($msg, 'Rate limit') !== false) {
+                if ($retryCount < 3) {
+                    log_message('warning', "Rate limit (429) hit for Regno " . ($row['Regno'] ?? '') . ". Retrying in 2s (Attempt " . ($retryCount + 1) . ")...");
+                    sleep(2);
+                    return $this->processRegnoBundle($row, $skippedKfas, $retryCount + 1);
+                }
+            }
+
             // Automatic KFA bypass: Catch "Code not found: '93026854' in system" and retry bundle without it
             if (preg_match('/Code not found:\s*\'([^\']+)\'\s*in system/i', $msg, $matches)) {
                 $invalidKfa = trim($matches[1]);
@@ -1779,6 +1788,7 @@ class SatuSehat extends BaseController
                     'medication_id' => $foundId
                 ];
             }
+            usleep(200000); // Throttling 0.2s delay to prevent hitting SATUSEHAT rate limit quota
         }
 
         return $this->response->setJSON([

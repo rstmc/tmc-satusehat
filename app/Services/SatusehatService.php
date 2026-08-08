@@ -49,11 +49,36 @@ class SatusehatService
         return $json['access_token'];
     }
 
+    /**
+     * Helper to execute API requests with automatic exponential backoff retry on HTTP 429 (Rate Limit).
+     */
+    private function executeWithRetry(callable $requestFunc, int $maxRetries = 3)
+    {
+        $attempt = 0;
+        while (true) {
+            $attempt++;
+            try {
+                return $requestFunc();
+            } catch (\Throwable $e) {
+                $msg = $e->getMessage();
+                $isRateLimit = (stripos($msg, '429') !== false || stripos($msg, 'QuotaViolation') !== false || stripos($msg, 'Rate limit') !== false);
+                
+                if ($isRateLimit && $attempt <= $maxRetries) {
+                    $waitTime = $attempt * 2; // 2s, 4s, 6s
+                    log_message('warning', "SATUSEHAT Rate Limit (429) hit. Waiting {$waitTime}s before retry {$attempt}/{$maxRetries}...");
+                    sleep($waitTime);
+                    continue;
+                }
+                throw $e;
+            }
+        }
+    }
+
     public function get(string $resource, array $query = []): array
     {
-        $token = $this->token();
-        
-        try {
+        return $this->executeWithRetry(function () use ($resource, $query) {
+            $token = $this->token();
+            
             $url = getenv('SATUSEHAT_BASE_URL') . "/fhir-r4/v1/{$resource}";
             
             // Append query string if exists
@@ -94,17 +119,14 @@ class SatusehatService
             }
 
             return $body;
-
-        } catch (\Throwable $e) {
-            throw $e;
-        }
+        });
     }
 
     public function post(string $resource, array $payload, array $extraHeaders = []): array
     {
-        $token = $this->token();
-        
-        try {
+        return $this->executeWithRetry(function () use ($resource, $payload, $extraHeaders) {
+            $token = $this->token();
+            
             $headers = array_merge([
                 'Authorization' => "Bearer {$token}",
                 'Content-Type'  => getenv('SATUSEHAT_CONTENT_TYPE') ?: 'application/json',
@@ -135,17 +157,14 @@ class SatusehatService
             }
 
             return $body;
-
-        } catch (\Throwable $e) {
-            throw $e;
-        }
+        });
     }
 
     public function postBundle(array $bundlePayload, array $extraHeaders = []): array
     {
-        $token = $this->token();
-        
-        try {
+        return $this->executeWithRetry(function () use ($bundlePayload, $extraHeaders) {
+            $token = $this->token();
+            
             $headers = array_merge([
                 'Authorization' => "Bearer {$token}",
                 'Content-Type'  => getenv('SATUSEHAT_CONTENT_TYPE') ?: 'application/json',
@@ -207,17 +226,14 @@ class SatusehatService
             }
 
             return $body;
-
-        } catch (\Throwable $e) {
-            throw $e;
-        }
+        });
     }
 
     public function put(string $resource, string $id, array $payload): array
     {
-        $token = $this->token();
-        
-        try {
+        return $this->executeWithRetry(function () use ($resource, $id, $payload) {
+            $token = $this->token();
+            
             $res = $this->client->put(
                 getenv('SATUSEHAT_BASE_URL') . "/fhir-r4/v1/{$resource}/{$id}",
                 [
@@ -246,17 +262,14 @@ class SatusehatService
             }
 
             return $body;
-
-        } catch (\Throwable $e) {
-            throw $e;
-        }
+        });
     }
 
     public function delete(string $resource, string $id): array
     {
-        $token = $this->token();
-        
-        try {
+        return $this->executeWithRetry(function () use ($resource, $id) {
+            $token = $this->token();
+            
             $res = $this->client->delete(
                 getenv('SATUSEHAT_BASE_URL') . "/fhir-r4/v1/{$resource}/{$id}",
                 [
@@ -276,10 +289,7 @@ class SatusehatService
             }
 
             return $body;
-
-        } catch (\Throwable $e) {
-            throw $e;
-        }
+        });
     }
 
 
