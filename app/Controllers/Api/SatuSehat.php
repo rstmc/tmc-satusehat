@@ -1077,9 +1077,7 @@ class SatuSehat extends BaseController
                 $immData = array_merge($row, $item);
                 $immData['VaccineCode'] = $kfaCode;
                 $immData['VaccineDisplay'] = $display;
-                $immData['VaccineSystem'] = (strpos($kfaCode, 'VG') === 0)
-                    ? 'http://terminology.kemkes.go.id/CodeSystem/vaccine'
-                    : 'http://sys-ids.kemkes.go.id/kfa';
+                $immData['VaccineSystem'] = 'http://sys-ids.kemkes.go.id/kfa';
 
                 if (method_exists($immController, 'buildPayload')) {
                     $immPayload = $immController->buildPayload($immData, $encounterId);
@@ -1229,18 +1227,8 @@ class SatuSehat extends BaseController
                 }
 
                 if ($identifierSystem && $identifierValue) {
-                    // Gunakan POST + ifNoneExist (bukan conditional PUT)
-                    // Tambahkan subject= agar pencarian cukup spesifik (mencegah "search criteria are not selective enough" → 412)
-                    $ifNoneExistQuery = 'identifier=' . $identifierSystem . '|' . $identifierValue;
-                    // Resource klinik: tambahkan subject IHS pasien jika tersedia
-                    if (!empty($row['IHSSatuSehat'])) {
-                        $payloadRT = $payload['resourceType'] ?? '';
-                        // Medication tidak punya subject → tidak perlu subject filter
-                        if ($payloadRT !== 'Medication' && $payloadRT !== 'Organization') {
-                            $ifNoneExistQuery .= '&subject=' . $row['IHSSatuSehat'];
-                        }
-                    }
-                    $entry['request']['ifNoneExist'] = $ifNoneExistQuery;
+                    // Gunakan POST + ifNoneExist (HANYA identifier= yang diizinkan oleh validator bundle SATUSEHAT)
+                    $entry['request']['ifNoneExist'] = 'identifier=' . $identifierSystem . '|' . $identifierValue;
                 }
             }
         }
