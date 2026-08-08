@@ -1348,13 +1348,13 @@ class SatuSehat extends BaseController
 
                     if ($resourceType && $identifierQuery) {
                         try {
-                            // 1. Cari resource duplikat di kemkes (hanya gunakan identifier)
-                            $queryParams = ['identifier' => urldecode($identifierQuery)];
-                            $searchRes = $this->service->get($resourceType, $queryParams);
-                            if (isset($searchRes['entry']) && is_array($searchRes['entry']) && count($searchRes['entry']) > 0) {
+                            // 1. Cari resource duplikat di kemkes menggunakan strategi pencarian ganda (subject & identifier)
+                            $matchedEntries = $this->findMatchingResourceOnKemkes($resourceType, $identifierQuery, $row);
+
+                            if (!empty($matchedEntries)) {
                                 // Jika ini Encounter dan ID ada di Kemkes, update DB lokal & set flag cleanedUp untuk retry
                                 if ($resourceType === 'Encounter') {
-                                    $existingEncId = $searchRes['entry'][0]['resource']['id'] ?? null;
+                                    $existingEncId = $matchedEntries[0]['resource']['id'] ?? null;
                                     if ($existingEncId) {
                                         $registerModel = new Register();
                                         $registerModel->updateEncounter($row['Regno'], $row['Medrec'], $existingEncId);
@@ -1364,10 +1364,9 @@ class SatuSehat extends BaseController
                                 }
 
                                 // Jika lebih dari 1 match! Hapus salah satu agar menyisakan tepat satu resource
-                                // Kita keep entry pertama, dan hapus entry sisanya
-                                if (count($searchRes['entry']) > 1) {
-                                    for ($i = 1; $i < count($searchRes['entry']); $i++) {
-                                        $dupId = $searchRes['entry'][$i]['resource']['id'] ?? null;
+                                if (count($matchedEntries) > 1) {
+                                    for ($i = 1; $i < count($matchedEntries); $i++) {
+                                        $dupId = $matchedEntries[$i]['resource']['id'] ?? null;
                                         if ($dupId) {
                                             $this->service->delete($resourceType, $dupId);
                                         }
@@ -1571,6 +1570,60 @@ class SatuSehat extends BaseController
                 'message' => $e->getMessage()
             ])->setStatusCode(400);
         }
+    }
+
+    private function findMatchingResourceOnKemkes(string $resourceType, string $identifierQuery, array $row): array
+    {
+        $entries = [];
+
+        // Strategi 1: Cari via subject (pencarian per pasien paling stabil di SATUSEHAT API, tidak pernah 400/not selective)
+        if (!empty($row['IHSSatuSehat']) && !in_array($resourceType, ['Medication', 'Organization'])) {
+            try {
+                $searchRes = $this->service->get($resourceType, ['subject' => $row['IHSSatuSehat'], '_count' => 100]);
+                if (!empty($searchRes['entry']) && is_array($searchRes['entry'])) {
+                    foreach ($searchRes['entry'] as $item) {
+                        $resource = $item['resource'] ?? [];
+                        $identifiers = $resource['identifier'] ?? [];
+                        if (is_array($identifiers)) {
+                            if (isset($identifiers['system'])) {
+                                $identifiers = [$identifiers];
+                            }
+                            foreach ($identifiers as $idObj) {
+                                $val = $idObj['value'] ?? '';
+                                $sys = $idObj['system'] ?? '';
+                                $fullId = $sys !== '' ? ($sys . '|' . $val) : $val;
+
+                                if (
+                                    (!empty($row['Regno']) && $val === $row['Regno']) || 
+                                    (!empty($val) && strpos($identifierQuery, $val) !== false) || 
+                                    $fullId === $identifierQuery
+                                ) {
+                                    $entries[] = $item;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                if (!empty($entries)) {
+                    return $entries;
+                }
+            } catch (\Exception $ex1) {
+                // Lanjut ke Strategi 2 jika Strategi 1 throw error
+            }
+        }
+
+        // Strategi 2: Fallback ke identifier murni
+        try {
+            $searchRes = $this->service->get($resourceType, ['identifier' => urldecode($identifierQuery)]);
+            if (!empty($searchRes['entry']) && is_array($searchRes['entry'])) {
+                return $searchRes['entry'];
+            }
+        } catch (\Exception $ex2) {
+            // Abaikan
+        }
+
+        return [];
     }
 
     private function getOrgId(): string
