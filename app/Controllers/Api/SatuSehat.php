@@ -750,13 +750,17 @@ class SatuSehat extends BaseController
                     $medPayload = $medicationController->buildPayload($tempObat, $encounterId);
                     if ($medPayload) {
                         $orgId = $this->getOrgId();
+                        // ifNoneExist identifier harus stabil (tidak random) agar match saat push ulang.
+                        // Gunakan kfa code (kodeDeduplikasi) sebagai nilai identifier
+                        $medIdentifierValue = $kodeDeduplikasi;
+                        $medPayload['identifier'][0]['value'] = $medIdentifierValue;
                         $entries[] = [
                             "fullUrl" => $medUuid,
                             "resource" => $medPayload,
                             "request" => [
                                 "method" => "POST",
                                 "url" => "Medication",
-                                "ifNoneExist" => "identifier=http://sys-ids.kemkes.go.id/medication/" . $orgId . "|" . $tempObat['KodeObat']
+                                "ifNoneExist" => "identifier=http://sys-ids.kemkes.go.id/medication/" . $orgId . "|" . $medIdentifierValue
                             ]
                         ];
                         $entryKeys[] = ['type' => 'Medication', 'subtype' => 'medication', 'local_id' => $obatItem['KodeObat'] ?? ''];
@@ -1160,6 +1164,54 @@ class SatuSehat extends BaseController
                     }
                 }
 
+                // Auto-inject identifier untuk resource yang tidak punya identifier bawaan
+                // agar ifNoneExist bisa bekerja dan mencegah 412 pada push ulang.
+                if (!$identifiers && !empty($row['Regno'])) {
+                    $orgId = $this->getOrgId();
+                    $subtype = $entryKeys[array_search($entry, $entries)]['subtype']
+                        ?? ($resourceType ? strtolower($resourceType) : 'resource');
+                    $autoSystem = null;
+                    $autoValue  = null;
+
+                    switch ($resourceType) {
+                        case 'Observation':
+                            $loincCode = $payload['code']['coding'][0]['code'] ?? 'obs';
+                            $autoSystem = 'http://sys-ids.kemkes.go.id/observation/' . $orgId;
+                            $autoValue  = $row['Regno'] . '-obs-' . $loincCode;
+                            break;
+                        case 'CarePlan':
+                            $cpCategory = $payload['category'][0]['coding'][0]['code'] ?? 'plan';
+                            $autoSystem = 'http://sys-ids.kemkes.go.id/careplan/' . $orgId;
+                            $autoValue  = $row['Regno'] . '-careplan-' . $cpCategory;
+                            break;
+                        case 'ClinicalImpression':
+                            $autoSystem = 'http://sys-ids.kemkes.go.id/clinicalimpression/' . $orgId;
+                            $autoValue  = $row['Regno'] . '-clinicalimpression';
+                            break;
+                        case 'Procedure':
+                            $procCode = $payload['code']['coding'][0]['code'] ?? 'proc';
+                            $autoSystem = 'http://sys-ids.kemkes.go.id/procedure/' . $orgId;
+                            $autoValue  = $row['Regno'] . '-procedure-' . $procCode;
+                            break;
+                        case 'QuestionnaireResponse':
+                            $autoSystem = 'http://sys-ids.kemkes.go.id/questionnaire-response/' . $orgId;
+                            $autoValue  = $row['Regno'] . '-questionnaire';
+                            break;
+                        case 'ServiceRequest':
+                            $srCode = $payload['code']['coding'][0]['code'] ?? 'sr';
+                            $autoSystem = 'http://sys-ids.kemkes.go.id/servicerequest/' . $orgId;
+                            $autoValue  = $row['Regno'] . '-sr-' . $srCode;
+                            break;
+                    }
+
+                    if ($autoSystem && $autoValue) {
+                        $entry['resource']['identifier'] = [
+                            ['system' => $autoSystem, 'value' => $autoValue]
+                        ];
+                        $identifiers = [['system' => $autoSystem, 'value' => $autoValue]];
+                    }
+                }
+
                 $identifierSystem = null;
                 $identifierValue  = null;
 
@@ -1182,9 +1234,17 @@ class SatuSehat extends BaseController
 
                 if ($identifierSystem && $identifierValue) {
                     // Gunakan POST + ifNoneExist (bukan conditional PUT)
-                    // SatuSehat tidak mendukung conditional PUT dalam bundle transaction
-                    // dengan baik, menyebabkan "search criteria are not selective enough"
-                    $entry['request']['ifNoneExist'] = 'identifier=' . $identifierSystem . '|' . $identifierValue;
+                    // Tambahkan subject= agar pencarian cukup spesifik (mencegah "search criteria are not selective enough" → 412)
+                    $ifNoneExistQuery = 'identifier=' . $identifierSystem . '|' . $identifierValue;
+                    // Resource klinik: tambahkan subject IHS pasien jika tersedia
+                    if (!empty($row['IHSSatuSehat'])) {
+                        $payloadRT = $payload['resourceType'] ?? '';
+                        // Medication tidak punya subject → tidak perlu subject filter
+                        if ($payloadRT !== 'Medication' && $payloadRT !== 'Organization') {
+                            $ifNoneExistQuery .= '&subject=' . $row['IHSSatuSehat'];
+                        }
+                    }
+                    $entry['request']['ifNoneExist'] = $ifNoneExistQuery;
                 }
             }
         }
@@ -1337,20 +1397,29 @@ class SatuSehat extends BaseController
             // men-save parsial (tanpa roll-back) Encounter/Goal, menyebabkan push berikutnya 
             // selalu tertolak sebagai duplikat oleh validator, sedangkan API GET Encounter 
             // belum terupdate dari ElasticSearch (lag).
-            if (
-                (stripos($msg, '20002') !== false || stripos($msg, 'RuleNumber') !== false)
-                && (stripos($msg, 'Encounter') !== false || stripos($msg, 'Encounter') !== false)
-            ) {
-                // Update local DB to PENDING-SYNC
-                $registerModel = new Register();
-                $registerModel->updateEncounter($row['Regno'], $row['Medrec'], 'PENDING-SYNC');
+            // Bug Kemkes 20002: resource sudah ada di server tapi dikembalikan sebagai error "Found duplicate"
+            // bukannya 200 OK (ifNoneExist seharusnya skip bukan error).
+            if (stripos($msg, '20002') !== false || preg_match('/Found duplicate:/i', $msg)) {
+                if (stripos($msg, 'Encounter') !== false) {
+                    // Khusus Encounter → PENDING-SYNC (tunggu indeks Kemkes)
+                    $registerModel = new Register();
+                    $registerModel->updateEncounter($row['Regno'], $row['Medrec'], 'PENDING-SYNC');
 
-                return [
-                    'regno' => $row['Regno'],
-                    'status' => 'success',
-                    'message' => 'Status PENDING-SYNC. Menunggu server Kemkes selesai meng-indeks data (Bypass Bug 20002).',
-                    'bundle_response' => 'PENDING-SYNC'
-                ];
+                    return [
+                        'regno'           => $row['Regno'],
+                        'status'          => 'success',
+                        'message'         => 'Status PENDING-SYNC. Menunggu server Kemkes selesai meng-indeks data (Bypass Bug 20002).',
+                        'bundle_response' => 'PENDING-SYNC'
+                    ];
+                } else {
+                    // Resource lain (Goal, CarePlan, ClinicalImpression, dst.) → sudah ada di Kemkes, skip
+                    return [
+                        'regno'           => $row['Regno'],
+                        'status'          => 'success',
+                        'message'         => 'Data sudah terkirim sebelumnya (Bypass Bug 20002 – duplicate resource).',
+                        'bundle_response' => 'ALREADY_SENT'
+                    ];
+                }
             }
 
             // Automatic KFA bypass: Catch "Code not found: '93026854' in system" and retry bundle without it

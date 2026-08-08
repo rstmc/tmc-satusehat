@@ -18,9 +18,12 @@ class ClinicalImpression extends ClinicalImpressionBase
         $effectiveDateTime = date('c', $timestamp);
         $date = date('c', $timestamp);
 
-        $identifierValue = $row['NoPrognosis'] ?? 'Prognosis_' . date('His');
+        // Identifier harus stabil (tidak random) agar ifNoneExist bisa deteksi duplikat
+        $identifierValue = !empty($row['NoPrognosis'])
+            ? $row['NoPrognosis']
+            : ($row['Regno'] . '-clinical-impression');
 
-        $prognosisCode = $row['PrognosisCode'] ?? '170968001';
+        $prognosisCode    = $row['PrognosisCode']    ?? '170968001';
         $prognosisDisplay = $row['PrognosisDisplay'] ?? 'Prognosis good';
 
         $investigationItems = [];
@@ -41,14 +44,14 @@ class ClinicalImpression extends ClinicalImpressionBase
                 "itemCodeableConcept" => [
                     "coding" => [
                         [
-                            "system" => "http://hl7.org/fhir/sid/icd-10",
-                            "code" => $row['KdIcd'],
+                            "system"  => "http://hl7.org/fhir/sid/icd-10",
+                            "code"    => $row['KdIcd'],
                             "display" => $row['NmIcd'] ?? ''
                         ]
                     ]
                 ]
             ];
-            
+
             if (!empty($keluhanUtamaId)) {
                 $findingItem["itemReference"] = [
                     "reference" => "Condition/" . $keluhanUtamaId
@@ -70,34 +73,34 @@ class ClinicalImpression extends ClinicalImpressionBase
             "identifier" => [
                 [
                     "system" => "http://sys-ids.kemkes.go.id/clinicalimpression/" . $orgId,
-                    "use" => "official",
-                    "value" => $identifierValue
+                    "use"    => "official",
+                    "value"  => $identifierValue
                 ]
             ],
-            "status" => "completed",
+            "status"      => "completed",
             "description" => $row['Assessment'] ?? '',
-            "subject" => [
+            "subject"     => [
                 "reference" => "Patient/" . ($row['IHSSatuSehat'] ?? ''),
-                "display" => $row['Firstname'] ?? ''
+                "display"   => $row['Firstname'] ?? ''
             ],
             "encounter" => [
                 "reference" => "Encounter/" . $encounterId,
-                "display" => "Kunjungan " . ($row['Firstname'] ?? '') . " di hari " . $this->service->formatIndonesianDate($regDate)
+                "display"   => "Kunjungan " . ($row['Firstname'] ?? '') . " di hari " . $this->service->formatIndonesianDate($regDate)
             ],
             "effectiveDateTime" => $effectiveDateTime,
-            "date" => $date,
-            "assessor" => [
+            "date"              => $date,
+            "assessor"          => [
                 "reference" => "Practitioner/" . ($row['KdDocSatuSehat'] ?? 'N10000001')
             ],
-            "problem" => $problem,
-            "summary" => $row['Assessment'] ?? '',
-            "finding" => $finding,
+            "problem"  => $problem,
+            "summary"  => $row['Assessment'] ?? '',
+            "finding"  => $finding,
             "prognosisCodeableConcept" => [
                 [
                     "coding" => [
                         [
-                            "system" => "http://snomed.info/sct",
-                            "code" => $prognosisCode,
+                            "system"  => "http://snomed.info/sct",
+                            "code"    => $prognosisCode,
                             "display" => $prognosisDisplay
                         ]
                     ]

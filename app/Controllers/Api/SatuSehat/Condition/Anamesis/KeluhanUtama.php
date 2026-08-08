@@ -12,6 +12,8 @@ class KeluhanUtama extends ConditionBase
             return null;
         }
 
+        $orgId = getenv('SATUSEHAT_ORG_ID');
+
         $dateOnly = date('Y-m-d', strtotime($row['Regdate']));
         $timeOnly = date('H:i:s', strtotime($row['RegTime']));
         $dateTimeStr = $dateOnly . ' ' . $timeOnly;
@@ -19,6 +21,12 @@ class KeluhanUtama extends ConditionBase
 
         $payload = [
             "resourceType" => "Condition",
+            "identifier" => [
+                [
+                    "system" => "http://sys-ids.kemkes.go.id/condition/" . $orgId,
+                    "value"  => $row['Regno'] . '-keluhan-utama',
+                ]
+            ],
             "clinicalStatus" => [
                 "coding" => [
                     ["system" => "http://terminology.hl7.org/CodeSystem/condition-clinical", "code" => "active", "display" => "Active"]
@@ -33,15 +41,19 @@ class KeluhanUtama extends ConditionBase
             ],
             "code" => [
                 "coding" => [
-                    ["system" => "http://snomed.info/sct", "code" => (!empty($row['SnomedCodeKeluhanUtama']) ? $row['SnomedCodeKeluhanUtama'] : '404684003'), "display" => (!empty($row['SnomedDisplayKeluhanUtama']) ? $row['SnomedDisplayKeluhanUtama'] : 'Clinical finding')]
+                    [
+                        "system"  => "http://snomed.info/sct",
+                        "code"    => !empty($row['SnomedCodeKeluhanUtama']) ? $row['SnomedCodeKeluhanUtama'] : '404684003',
+                        "display" => !empty($row['SnomedDisplayKeluhanUtama']) ? $row['SnomedDisplayKeluhanUtama'] : 'Clinical finding',
+                    ]
                 ]
             ],
-            "subject" => ["reference" => "Patient/" . $row['IHSSatuSehat'], "display" => $row['Firstname']],
-            "encounter" => ["reference" => "Encounter/" . $encounterId],
+            "subject"      => ["reference" => "Patient/" . $row['IHSSatuSehat'], "display" => $row['Firstname']],
+            "encounter"    => ["reference" => "Encounter/" . $encounterId],
             "onsetDateTime" => $recordedDate,
             "recordedDate" => $recordedDate,
-            "recorder" => ["reference" => "Practitioner/" . $row['KdDocSatuSehat'], "display" => $row['NmDoc']],
-            "note" => [
+            "recorder"     => ["reference" => "Practitioner/" . $row['KdDocSatuSehat'], "display" => $row['NmDoc']],
+            "note"         => [
                 ["text" => $row['Subjective']]
             ]
         ];

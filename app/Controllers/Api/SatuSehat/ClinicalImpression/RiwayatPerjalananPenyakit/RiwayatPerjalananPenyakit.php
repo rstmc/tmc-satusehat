@@ -17,8 +17,16 @@ class RiwayatPerjalananPenyakit extends ClinicalImpressionBase
         $dateTimeStr = $dateOnly . ' ' . $timeOnly;
         $effectiveDateTime = date('c', strtotime($dateTimeStr));
 
+        $orgId = getenv('SATUSEHAT_ORG_ID');
+
         $payload = [
             "resourceType" => "ClinicalImpression",
+            "identifier" => [
+                [
+                    "system" => "http://sys-ids.kemkes.go.id/clinicalimpression/" . $orgId,
+                    "value"  => $row['Regno'] . '-riwayat-penyakit',
+                ]
+            ],
             "status" => "completed",
             "code" => [
                 "coding" => [
