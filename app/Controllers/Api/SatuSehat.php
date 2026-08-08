@@ -430,8 +430,17 @@ class SatuSehat extends BaseController
         );
     }
 
-    private function processRegnoBundle($row, $skippedKfas = [])
+    private function processRegnoBundle($row, $skippedKfas = [], int $retryCount = 0)
     {
+        if ($retryCount >= 3) {
+            log_message('error', "processRegnoBundle reached max retries (3) for Regno " . ($row['Regno'] ?? 'UNKNOWN'));
+            return [
+                'regno'   => $row['Regno'] ?? 'UNKNOWN',
+                'status'  => 'error',
+                'message' => 'Max retries (3) reached during bundle recovery.',
+            ];
+        }
+
         // Sanitize missing Practitioner IDs
         if (empty(trim($row['KdDocSatuSehat'] ?? '')))
             $row['KdDocSatuSehat'] = '';
@@ -751,8 +760,13 @@ class SatuSehat extends BaseController
                 continue;
             }
 
-            if (!empty($obatItem['Medication_id_satu_sehat'])) {
-                $medUuidsByKode[$kodeDeduplikasi] = $obatItem['Medication_id_satu_sehat'];
+            $existingMedId = !empty($obatItem['Medication_id_satu_sehat'])
+                ? $obatItem['Medication_id_satu_sehat']
+                : $this->resolveMedicationProactively($kodeDeduplikasi, $obatItem['KodeObat'] ?? null);
+
+            if (!empty($existingMedId)) {
+                // Medication sudah ada di DB lokal atau Kemkes -> gunakan ID aslinya, tidak perlu POST di bundle
+                $medUuidsByKode[$kodeDeduplikasi] = $existingMedId;
             } else {
                 $medUuid = 'urn:uuid:' . $this->generateUuid();
                 $medUuidsByKode[$kodeDeduplikasi] = $medUuid;
@@ -1386,14 +1400,14 @@ class SatuSehat extends BaseController
                                 }
                             }
                         } catch (\Exception $cleanEx) {
-                            // Abaikan error cleanup agar tidak menghalangi resource lainnya
+                            log_message('error', "Cleanup search error for {$resourceType} ({$identifierQuery}): " . $cleanEx->getMessage());
                         }
                     }
                 }
 
                 // Jika berhasil membersihkan duplikat / menyelaraskan ID, lakukan retry otomatis
                 if ($cleanedUp) {
-                    return $this->processRegnoBundle($row, $skippedKfas);
+                    return $this->processRegnoBundle($row, $skippedKfas, $retryCount + 1);
                 }
             }
 
@@ -1620,21 +1634,74 @@ class SatuSehat extends BaseController
                     return $entries;
                 }
             } catch (\Exception $ex1) {
-                // Lanjut ke Strategi 2 jika Strategi 1 throw error
+                log_message('error', "findMatchingResourceOnKemkes Strategy 1 error for {$resourceType}: " . $ex1->getMessage());
             }
         }
 
         // Strategi 2: Fallback ke identifier murni
         try {
-            $searchRes = $this->service->get($resourceType, ['identifier' => urldecode($identifierQuery)]);
+            $searchRes = $this->service->get($resourceType, ['identifier' => urldecode($identifierQuery), '_count' => 200]);
             if (!empty($searchRes['entry']) && is_array($searchRes['entry'])) {
                 return $searchRes['entry'];
             }
         } catch (\Exception $ex2) {
-            // Abaikan
+            log_message('error', "findMatchingResourceOnKemkes Strategy 2 error for {$resourceType} ({$identifierQuery}): " . $ex2->getMessage());
         }
 
         return [];
+    }
+
+    private function resolveMedicationProactively(string $kfaCode, ?string $localKodeObat = null): ?string
+    {
+        $orgId = $this->getOrgId();
+        if (empty($kfaCode) || empty($orgId)) {
+            return null;
+        }
+
+        $identifierQuery = 'http://sys-ids.kemkes.go.id/medication/' . $orgId . '|' . $kfaCode;
+        $foundId = null;
+
+        try {
+            // Search Kemkes by KFA identifier with high _count limit
+            $searchRes = $this->service->get('Medication', [
+                'identifier' => $identifierQuery,
+                '_count'     => 200
+            ]);
+
+            if (!empty($searchRes['entry']) && is_array($searchRes['entry'])) {
+                $foundId = $searchRes['entry'][0]['resource']['id'] ?? null;
+
+                // Jika terdapat duplikat > 1 di Kemkes, hapus sisa duplikatnya ($i = 1..N)
+                if (count($searchRes['entry']) > 1) {
+                    for ($i = 1; $i < count($searchRes['entry']); $i++) {
+                        $dupId = $searchRes['entry'][$i]['resource']['id'] ?? null;
+                        if ($dupId) {
+                            try {
+                                $this->service->delete('Medication', $dupId);
+                            } catch (\Throwable $t) {
+                                log_message('error', "Failed to delete duplicate Medication {$dupId}: " . $t->getMessage());
+                            }
+                        }
+                    }
+                }
+
+                // Simpan ID valid pertama ke DB lokal jika localKodeObat tersedia
+                if ($foundId && $localKodeObat) {
+                    try {
+                        $obatModel = new \App\Models\MasterObat();
+                        $obatModel->update($localKodeObat, [
+                            'Medication_id_satu_sehat' => $foundId
+                        ]);
+                    } catch (\Throwable $t) {
+                        log_message('error', "Failed to update local MasterObat {$localKodeObat}: " . $t->getMessage());
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            log_message('error', "Proactive Medication resolve error for KFA {$kfaCode}: " . $e->getMessage());
+        }
+
+        return $foundId;
     }
 
     private function getOrgId(): string
