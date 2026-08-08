@@ -1757,7 +1757,7 @@ class SatuSehat extends BaseController
         }
 
         $obatModel = new \App\Models\MasterObat();
-        $allObat = $obatModel->findAll();
+        $allObat = $obatModel->select('KdObat, KfaCode, kfa_code, Medication_id_satu_sehat')->findAll();
 
         $processedKfas = [];
         $totalCleaned = 0;
