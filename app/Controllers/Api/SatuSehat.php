@@ -1149,12 +1149,23 @@ class SatuSehat extends BaseController
                     continue;
                 }
 
-                $identifierValue = null;
-                $identifierSystem = null;
+                $identifiers = null;
+                if (isset($payload['identifier'])) {
+                    // Beberapa resource (Composition) pakai object tunggal, bukan array
+                    if (is_array($payload['identifier']) && isset($payload['identifier']['system'])) {
+                        // Single object → bungkus jadi array agar loop berjalan
+                        $identifiers = [$payload['identifier']];
+                    } elseif (is_array($payload['identifier'])) {
+                        $identifiers = $payload['identifier'];
+                    }
+                }
 
-                if (isset($payload['identifier']) && is_array($payload['identifier'])) {
+                $identifierSystem = null;
+                $identifierValue  = null;
+
+                if ($identifiers) {
                     // Prioritaskan identifier prescription-item untuk resource obat
-                    foreach ($payload['identifier'] as $idObj) {
+                    foreach ($identifiers as $idObj) {
                         if (isset($idObj['system']) && isset($idObj['value'])) {
                             if (strpos($idObj['system'], 'prescription-item') !== false) {
                                 $identifierSystem = $idObj['system'];

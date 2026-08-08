@@ -10,8 +10,16 @@ class EncounterDiagnosis extends ConditionBase
             return null;
         }
 
+        $orgId = getenv('SATUSEHAT_ORG_ID');
+
         $payload = [
             "resourceType" => "Condition",
+            "identifier" => [
+                [
+                    "system" => "http://sys-ids.kemkes.go.id/condition/" . $orgId,
+                    "value"  => $row['Regno'] . '-diagnosis-' . $row['KdIcd'],
+                ]
+            ],
             "clinicalStatus" => [
                 "coding" => [
                     ["system" => "http://terminology.hl7.org/CodeSystem/condition-clinical", "code" => "active", "display" => "Active"]
