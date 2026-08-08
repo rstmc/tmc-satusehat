@@ -39,6 +39,7 @@ $routes->group('api', ['namespace' => 'App\Controllers\Api'], function ($routes)
     $routes->get('satusehat/push-date/(:segment)', 'SatuSehat::pushByDate/$1');        // push by tanggal (path param)
     $routes->post('satusehat/encounter-with-ihs', 'SatuSehat::hitEncounterWithIhs');
     $routes->get('satusehat/push-medication/(:any)', 'SatuSehat::pushMedicationByKdObat/$1');
+    $routes->get('satusehat/clean-duplicate-medications', 'SatuSehat::cleanDuplicateMedications');
 
     // Radiologi Integration Routes
     $routes->group('satusehat/radiology', ['namespace' => 'App\Controllers\Api\SatuSehat'], function ($routes) {
@@ -52,6 +53,15 @@ $routes->group('api', ['namespace' => 'App\Controllers\Api'], function ($routes)
         $routes->post('push-complete', 'RadiologiIntegration::pushRadiologyComplete');
     });
 
+
+    // Laboratorium Integration Routes
+    $routes->group('satusehat/laboratorium', ['namespace' => 'App\Controllers\Api\SatuSehat'], function ($routes) {
+        $routes->post('service-request',  'LaboratoriumIntegration::pushServiceRequest');
+        $routes->post('specimen',         'LaboratoriumIntegration::pushSpecimen');
+        $routes->post('observation',      'LaboratoriumIntegration::pushObservation');
+        $routes->post('diagnostic-report','LaboratoriumIntegration::pushDiagnosticReport');
+        $routes->post('push-complete',    'LaboratoriumIntegration::pushLabComplete');
+    });
 
     // DICOM Routes
     $routes->get('dicom/(:any)', 'DicomController::getDicomByDate/$1');

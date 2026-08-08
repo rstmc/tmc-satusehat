@@ -1225,6 +1225,44 @@ class SatuSehat extends BaseController
                             $autoSystem = 'http://sys-ids.kemkes.go.id/servicerequest/' . $orgId;
                             $autoValue  = $row['Regno'] . '-sr-' . $srCode;
                             break;
+                        case 'Goal':
+                            $autoSystem = 'http://sys-ids.kemkes.go.id/goal/' . $orgId;
+                            $autoValue  = $row['Regno'] . '-goal';
+                            break;
+                        case 'MedicationRequest':
+                            $medRef = str_replace('Medication/', '', $payload['medicationReference']['reference'] ?? 'med');
+                            $autoSystem = 'http://sys-ids.kemkes.go.id/prescription/' . $orgId;
+                            $autoValue  = $row['Regno'] . '-medreq-' . $medRef;
+                            break;
+                        case 'MedicationDispense':
+                            $medRef = str_replace('Medication/', '', $payload['medicationReference']['reference'] ?? 'med');
+                            $autoSystem = 'http://sys-ids.kemkes.go.id/medicationdispense/' . $orgId;
+                            $autoValue  = $row['Regno'] . '-meddisp-' . $medRef;
+                            break;
+                        case 'MedicationStatement':
+                            $medRef = str_replace('Medication/', '', $payload['medicationReference']['reference'] ?? 'med');
+                            $autoSystem = 'http://sys-ids.kemkes.go.id/medicationstatement/' . $orgId;
+                            $autoValue  = $row['Regno'] . '-medstmt-' . $medRef;
+                            break;
+                        case 'Immunization':
+                            $immCode = $payload['vaccineCode']['coding'][0]['code'] ?? 'imm';
+                            $autoSystem = 'http://sys-ids.kemkes.go.id/immunization/' . $orgId;
+                            $autoValue  = $row['Regno'] . '-imm-' . $immCode;
+                            break;
+                        case 'AllergyIntolerance':
+                            $algCode = $payload['code']['coding'][0]['code'] ?? 'allergy';
+                            $autoSystem = 'http://sys-ids.kemkes.go.id/allergyintolerance/' . $orgId;
+                            $autoValue  = $row['Regno'] . '-allergy-' . $algCode;
+                            break;
+                        case 'DiagnosticReport':
+                            $diagCode = $payload['code']['coding'][0]['code'] ?? 'diag';
+                            $autoSystem = 'http://sys-ids.kemkes.go.id/diagnosticreport/' . $orgId;
+                            $autoValue  = $row['Regno'] . '-diagreport-' . $diagCode;
+                            break;
+                        case 'Composition':
+                            $autoSystem = 'http://sys-ids.kemkes.go.id/composition/' . $orgId;
+                            $autoValue  = $row['Regno'] . '-composition';
+                            break;
                     }
 
                     if ($autoSystem && $autoValue) {
@@ -1445,7 +1483,7 @@ class SatuSehat extends BaseController
                 $invalidKfa = trim($matches[1]);
                 if (!empty($invalidKfa) && !in_array($invalidKfa, $skippedKfas)) {
                     $skippedKfas[] = $invalidKfa;
-                    return $this->processRegnoBundle($row, $skippedKfas);
+                    return $this->processRegnoBundle($row, $skippedKfas, $retryCount + 1);
                 }
             }
 
@@ -1702,6 +1740,53 @@ class SatuSehat extends BaseController
         }
 
         return $foundId;
+    }
+
+    /**
+     * Skrip pembersihan massal duplikat Medication di server Kemkes.
+     * GET /api/satusehat/clean-duplicate-medications
+     */
+    public function cleanDuplicateMedications()
+    {
+        $orgId = $this->getOrgId();
+        if (empty($orgId)) {
+            return $this->response->setStatusCode(400)->setJSON([
+                'status' => false,
+                'message' => 'SATUSEHAT_ORG_ID belum terkonfigurasi di env.'
+            ]);
+        }
+
+        $obatModel = new \App\Models\MasterObat();
+        $allObat = $obatModel->findAll();
+
+        $processedKfas = [];
+        $totalCleaned = 0;
+        $details = [];
+
+        foreach ($allObat as $obat) {
+            $kfaCode = trim(!empty($obat['kfa_code']) ? $obat['kfa_code'] : ($obat['KfaCode'] ?? ''));
+            $kdObat  = trim($obat['KdObat'] ?? '');
+
+            if (empty($kfaCode) || isset($processedKfas[$kfaCode])) {
+                continue;
+            }
+            $processedKfas[$kfaCode] = true;
+
+            $foundId = $this->resolveMedicationProactively($kfaCode, $kdObat);
+            if ($foundId) {
+                $details[] = [
+                    'kfa' => $kfaCode,
+                    'medication_id' => $foundId
+                ];
+            }
+        }
+
+        return $this->response->setJSON([
+            'status' => true,
+            'message' => 'Pembersihan duplikat Medication selesai.',
+            'total_kfa_processed' => count($processedKfas),
+            'details' => $details
+        ]);
     }
 
     private function getOrgId(): string
