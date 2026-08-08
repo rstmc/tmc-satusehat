@@ -458,19 +458,29 @@ class SatuSehat extends BaseController
         if (!$alreadySentEncounterId || $alreadySentEncounterId === 'PENDING-SYNC') {
             try {
                 $orgId = $this->getOrgId();
-                $encRes = $this->service->get('Encounter', [
-                    'subject'    => $row['IHSSatuSehat'],
-                    'identifier' => 'http://sys-ids.kemkes.go.id/encounter/' . $orgId . '|' . $row['Regno']
-                ]);
+                $encIdentifier = 'http://sys-ids.kemkes.go.id/encounter/' . $orgId . '|' . $row['Regno'];
+                
+                // Cari Encounter di Kemkes menggunakan helper pencarian ganda (subject & identifier)
+                $matchedEncounters = $this->findMatchingResourceOnKemkes('Encounter', $encIdentifier, $row);
 
                 $foundId = null;
-                if (isset($encRes['entry']) && is_array($encRes['entry']) && count($encRes['entry']) > 0) {
-                    $foundId = $encRes['entry'][0]['resource']['id'] ?? null;
+                if (!empty($matchedEncounters)) {
+                    $foundId = $matchedEncounters[0]['resource']['id'] ?? null;
+
+                    // Hapus duplikat Encounter ekstra jika ada >1 di Kemkes
+                    if (count($matchedEncounters) > 1) {
+                        for ($i = 1; $i < count($matchedEncounters); $i++) {
+                            $dupId = $matchedEncounters[$i]['resource']['id'] ?? null;
+                            if ($dupId) {
+                                try { $this->service->delete('Encounter', $dupId); } catch (\Exception $delEx) {}
+                            }
+                        }
+                    }
                 }
 
                 if (!empty($foundId)) {
                     $alreadySentEncounterId = $foundId;
-                    // Simpan ID yang sudah ketemu ke database lokal bapak
+                    // Simpan ID yang sudah ketemu ke database lokal
                     $registerModel = new \App\Models\Register();
                     $registerModel->updateEncounter($row['Regno'], $row['Medrec'], $alreadySentEncounterId);
                 } else if ($alreadySentEncounterId === 'PENDING-SYNC') {
@@ -483,6 +493,7 @@ class SatuSehat extends BaseController
                     ];
                 }
             } catch (\Exception $e) {
+                log_message('error', 'Check Encounter error for Regno ' . $row['Regno'] . ': ' . $e->getMessage());
             }
         }
 
