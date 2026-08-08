@@ -47,10 +47,6 @@ class QuestionnaireResponse extends QuestionnaireResponseBase
 
         $payload = [
             "resourceType" => "QuestionnaireResponse",
-            "identifier" => [
-                "system" => "http://sys-ids.kemkes.go.id/questionnaire-response/" . $orgId,
-                "value"  => ($row['Regno'] ?? 'UNKNOWN') . '-questionnaire'
-            ],
             "questionnaire" => "https://fhir.kemkes.go.id/Questionnaire/Q0002",
             "status" => "completed",
 

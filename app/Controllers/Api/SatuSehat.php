@@ -1193,10 +1193,6 @@ class SatuSehat extends BaseController
                             $autoSystem = 'http://sys-ids.kemkes.go.id/procedure/' . $orgId;
                             $autoValue  = $row['Regno'] . '-procedure-' . $procCode;
                             break;
-                        case 'QuestionnaireResponse':
-                            $autoSystem = 'http://sys-ids.kemkes.go.id/questionnaire-response/' . $orgId;
-                            $autoValue  = $row['Regno'] . '-questionnaire';
-                            break;
                         case 'ServiceRequest':
                             $srCode = $payload['code']['coding'][0]['code'] ?? 'sr';
                             $autoSystem = 'http://sys-ids.kemkes.go.id/servicerequest/' . $orgId;
