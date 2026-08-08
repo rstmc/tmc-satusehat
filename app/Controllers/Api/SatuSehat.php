@@ -1313,9 +1313,12 @@ class SatuSehat extends BaseController
         } catch (\Exception $e) {
             $msg = $e->getMessage();
 
-            // Intercept 412 Precondition Failed (Duplikasi data / match existing)
-            // Format pesan error: "[ResourceType]: 412 - Precondition Failed"
-            if (stripos($msg, '412') !== false) {
+            // Intercept 412 Precondition Failed / "search criteria are not selective enough" (Duplikasi data >1 di Kemkes)
+            if (
+                stripos($msg, '412') !== false 
+                || stripos($msg, 'not selective') !== false 
+                || stripos($msg, 'selective enough') !== false
+            ) {
                 // Cari resource type dan parameter identifier dari bundle payload yang dikirim
                 $cleanedUp = false;
                 foreach ($entries as $entry) {
@@ -1337,7 +1340,7 @@ class SatuSehat extends BaseController
                         try {
                             // 1. Cari resource duplikat di kemkes
                             $queryParams = ['identifier' => urldecode($identifierQuery)];
-                            if (!empty($row['IHSSatuSehat'])) {
+                            if (!empty($row['IHSSatuSehat']) && $resourceType !== 'Medication' && $resourceType !== 'Organization') {
                                 $queryParams['subject'] = $row['IHSSatuSehat'];
                             }
                             $searchRes = $this->service->get($resourceType, $queryParams);
