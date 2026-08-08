@@ -184,7 +184,7 @@ class SatuSehat extends BaseController
             '04' => ['code' => '394609007', 'display' => 'Surgical service'],
             '05' => ['code' => '408472002', 'display' => 'Obstetrics and gynecology service'],
             '07' => ['code' => '408478003', 'display' => 'Pediatric service'],
-            '08' => ['code' => '408465003', 'display' => 'Cardiology service'],
+            '08' => ['code' => '394579002', 'display' => 'Cardiology service'],
             '09' => ['code' => '394591006', 'display' => 'Neurology'],
             '10' => ['code' => '408470005', 'display' => 'Otolaryngology service'],
             '11' => ['code' => '394610002', 'display' => 'Urology'],
@@ -200,9 +200,9 @@ class SatuSehat extends BaseController
             '30' => ['code' => '408478007', 'display' => 'Emergency medical service'],
             '31' => ['code' => '419192003', 'display' => 'Internal medicine'],
             '32' => ['code' => '722164001', 'display' => 'Vascular surgery service'],
-            '33' => ['code' => '408476003', 'display' => 'Oral and maxillofacial surgery service'],
+            '33' => ['code' => '408465003', 'display' => 'Oral and maxillofacial surgery service'],
             '35' => ['code' => '419192003', 'display' => 'Internal medicine'],
-            '36' => ['code' => '408465003', 'display' => 'Cardiology service'],
+            '36' => ['code' => '394579002', 'display' => 'Cardiology service'],
             '37' => ['code' => '408464004', 'display' => 'Ophthalmology service'],
             '38' => ['code' => '394591006', 'display' => 'Neurology'],
             '39' => ['code' => '408472002', 'display' => 'Obstetrics and gynecology service'],
@@ -229,7 +229,7 @@ class SatuSehat extends BaseController
         $stCode = $serviceTypeMap[$kdPoli]['code'] ?? '419192003';
         $stDisplay = $serviceTypeMap[$kdPoli]['display'] ?? 'Internal medicine';
 
-        if (in_array($stCode, ['408457005', '408478007', '408469000'])) {
+        if (in_array($stCode, ['408457005', '408478007', '408469000', '408476003'])) {
             $stCode = '419192003';
             $stDisplay = 'Internal medicine';
         }
@@ -1255,26 +1255,45 @@ class SatuSehat extends BaseController
         } catch (\Exception $e) {
             $msg = $e->getMessage();
 
-            // Intercept 412 Precondition Failed (Duplikasi data)
+            // Intercept 412 Precondition Failed (Duplikasi data / match existing)
             // Format pesan error: "[ResourceType]: 412 - Precondition Failed"
             if (stripos($msg, '412') !== false) {
                 // Cari resource type dan parameter identifier dari bundle payload yang dikirim
-                // Kita cari entry mana yang bernilai conditional PUT (yang memiliki identifier=)
                 $cleanedUp = false;
                 foreach ($entries as $entry) {
                     $url = $entry['request']['url'] ?? '';
-                    if (strpos($url, '?identifier=') !== false) {
+                    $ifNoneExist = $entry['request']['ifNoneExist'] ?? '';
+
+                    $resourceType = $url;
+                    $identifierQuery = '';
+
+                    if (!empty($ifNoneExist) && strpos($ifNoneExist, 'identifier=') !== false) {
+                        $identifierQuery = str_replace('identifier=', '', $ifNoneExist);
+                    } elseif (strpos($url, '?identifier=') !== false) {
                         $parts = explode('?identifier=', $url);
                         $resourceType = $parts[0];
                         $identifierQuery = $parts[1] ?? '';
-                        
-                        if ($resourceType && $identifierQuery) {
-                            try {
-                                // 1. Cari resource duplikat di kemkes
-                                $searchRes = $this->service->get($resourceType, ['identifier' => urldecode($identifierQuery)]);
-                                if (isset($searchRes['entry']) && is_array($searchRes['entry']) && count($searchRes['entry']) > 1) {
-                                    // Lebih dari 1 match! Hapus salah satu agar menyisakan tepat satu resource
-                                    // Kita keep entry pertama, dan hapus entry sisanya
+                    }
+
+                    if ($resourceType && $identifierQuery) {
+                        try {
+                            // 1. Cari resource duplikat di kemkes
+                            $searchRes = $this->service->get($resourceType, ['identifier' => urldecode($identifierQuery)]);
+                            if (isset($searchRes['entry']) && is_array($searchRes['entry']) && count($searchRes['entry']) > 0) {
+                                // Jika ini Encounter dan ID belum tersimpan di local DB, update local DB
+                                if ($resourceType === 'Encounter') {
+                                    $existingEncId = $searchRes['entry'][0]['resource']['id'] ?? null;
+                                    if ($existingEncId && (empty($row['EcounterSatuSehat']) || $row['EcounterSatuSehat'] === 'PENDING-SYNC')) {
+                                        $registerModel = new Register();
+                                        $registerModel->updateEncounter($row['Regno'], $row['Medrec'], $existingEncId);
+                                        $row['EcounterSatuSehat'] = $existingEncId;
+                                        $cleanedUp = true;
+                                    }
+                                }
+
+                                // Jika lebih dari 1 match! Hapus salah satu agar menyisakan tepat satu resource
+                                // Kita keep entry pertama, dan hapus entry sisanya
+                                if (count($searchRes['entry']) > 1) {
                                     for ($i = 1; $i < count($searchRes['entry']); $i++) {
                                         $dupId = $searchRes['entry'][$i]['resource']['id'] ?? null;
                                         if ($dupId) {
@@ -1283,14 +1302,14 @@ class SatuSehat extends BaseController
                                     }
                                     $cleanedUp = true;
                                 }
-                            } catch (\Exception $cleanEx) {
-                                // Abaikan error cleanup agar tidak menghalangi resource lainnya
                             }
+                        } catch (\Exception $cleanEx) {
+                            // Abaikan error cleanup agar tidak menghalangi resource lainnya
                         }
                     }
                 }
 
-                // Jika berhasil membersihkan duplikat, lakukan retry otomatis
+                // Jika berhasil membersihkan duplikat / menyelaraskan ID, lakukan retry otomatis
                 if ($cleanedUp) {
                     return $this->processRegnoBundle($row, $skippedKfas);
                 }
@@ -1398,6 +1417,7 @@ class SatuSehat extends BaseController
         $results = [];
         foreach ($data as $row) {
             $results[] = $this->processRegnoBundle($row);
+            usleep(200000);
         }
 
         $successCount = count(array_filter($results, fn($r) => ($r['status'] ?? '') === 'success'));
