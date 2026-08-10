@@ -835,12 +835,6 @@ class SatuSehat extends BaseController
             }
             $obat['Urutan'] = $index + 1;
             $itemKode = trim($obat['KodeObat'] ?? '');
-            $kodeDeduplikasi = !empty($itemKode) ? $itemKode : $kfaKey;
-
-            // $medUuid = $medUuidsByKode[$itemKode] ?? ($medUuidsByKode[$kfaKey] ?? ($medUuidsByKode[$kodeDeduplikasi] ?? null));
-            // if (!$medUuid) {
-            //     continue;
-            // }
 
             $reqUuid = 'urn:uuid:' . $this->generateUuid();
             
@@ -854,7 +848,7 @@ class SatuSehat extends BaseController
 
             $reqData = array_merge($row, $obat);
             $reqData['NoResep'] = $noResep;
-            $reqData['MedicationId'] = $medUuid;
+            $reqData['MedicationId'] = $obat['Medication_id_satu_sehat'];
             $reqData['TglResep'] = $obat['TglResep'] ?? ($obat['RegDate'] ?? ($obat['Regdate'] ?? null));
             $reqData['AturanPakai'] = $obat['AturanPakai'] ?? null;
             $notes = [];
@@ -881,13 +875,6 @@ class SatuSehat extends BaseController
                 continue; // Skip item tanpa KFA valid
             }
             $itemKode = trim($obat['KodeObat'] ?? '');
-            $kodeDeduplikasi = !empty($itemKode) ? $itemKode : $kfaKey;
-
-            // $medUuid = $medUuidsByKode[$itemKode] ?? ($medUuidsByKode[$kfaKey] ?? ($medUuidsByKode[$kodeDeduplikasi] ?? null));
-            // if (!$medUuid) {
-            //     continue;
-            // }
-
             // Find matching MedicationRequest UUID
             $noResep = trim($obat['NoResep'] ?? ($obat['BLCode'] ?? ''));
             $mapKey = $noResep . '_' . $itemKode;
@@ -899,7 +886,7 @@ class SatuSehat extends BaseController
                 $medRequestUuids[$mapKey] = $reqUuid;
 
                 $reqData = array_merge($row, $obat);
-                $reqData['MedicationId'] = $medUuid;
+                $reqData['MedicationId'] = $obat['Medication_id_satu_sehat'];
                 $reqData['TglResep'] = $obat['TglResep'] ?? ($obat['RegDate'] ?? ($obat['Regdate'] ?? null));
                 $reqData['AturanPakai'] = $obat['AturanPakai'] ?? null;
                 $notes = [];
