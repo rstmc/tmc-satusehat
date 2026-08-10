@@ -749,60 +749,60 @@ class SatuSehat extends BaseController
 
         // 1. Register unique Medication resources from both temp and dispense arrays
         $allObats = array_merge($obatsTemp, $obatsDispense);
-        foreach ($allObats as $index => $obatItem) {
-            $kfaKey    = trim($obatItem['KFA'] ?? '');
-            $localKode = trim($obatItem['KodeObat'] ?? '');
+        // foreach ($allObats as $index => $obatItem) {
+        //     $kfaKey    = trim($obatItem['KFA'] ?? '');
+        //     $localKode = trim($obatItem['KodeObat'] ?? '');
 
-            // Skip jika KFA kosong atau tidak valid (harus numerik, bukan kode barang lokal)
-            if (empty($kfaKey) || !is_numeric($kfaKey)) {
-                continue;
-            }
+        //     // Skip jika KFA kosong atau tidak valid (harus numerik, bukan kode barang lokal)
+        //     if (empty($kfaKey) || !is_numeric($kfaKey)) {
+        //         continue;
+        //     }
 
-            $kodeDeduplikasi = !empty($localKode) ? $localKode : $kfaKey;
+        //     $kodeDeduplikasi = !empty($localKode) ? $localKode : $kfaKey;
 
-            if (isset($medUuidsByKode[$kodeDeduplikasi]) || ($localKode && isset($medUuidsByKode[$localKode]))) {
-                continue;
-            }
+        //     if (isset($medUuidsByKode[$kodeDeduplikasi]) || ($localKode && isset($medUuidsByKode[$localKode]))) {
+        //         continue;
+        //     }
 
-            $existingMedId = !empty($obatItem['Medication_id_satu_sehat'])
-                ? $obatItem['Medication_id_satu_sehat']
-                : $this->resolveMedicationProactively($kfaKey, $localKode);
+        //     $existingMedId = !empty($obatItem['Medication_id_satu_sehat'])
+        //         ? $obatItem['Medication_id_satu_sehat']
+        //         : $this->resolveMedicationProactively($kfaKey, $localKode);
 
-            if (!empty($existingMedId)) {
-                // Medication sudah ada di DB lokal atau Kemkes -> gunakan ID aslinya, tidak perlu POST di bundle
-                $medUuidsByKode[$kodeDeduplikasi] = $existingMedId;
-                if ($localKode) $medUuidsByKode[$localKode] = $existingMedId;
-                if ($kfaKey) $medUuidsByKode[$kfaKey] = $existingMedId;
-            } else {
-                $medUuid = 'urn:uuid:' . $this->generateUuid();
-                $medUuidsByKode[$kodeDeduplikasi] = $medUuid;
-                if ($localKode) $medUuidsByKode[$localKode] = $medUuid;
-                if ($kfaKey) $medUuidsByKode[$kfaKey] = $medUuid;
+        //     if (!empty($existingMedId)) {
+        //         // Medication sudah ada di DB lokal atau Kemkes -> gunakan ID aslinya, tidak perlu POST di bundle
+        //         $medUuidsByKode[$kodeDeduplikasi] = $existingMedId;
+        //         if ($localKode) $medUuidsByKode[$localKode] = $existingMedId;
+        //         if ($kfaKey) $medUuidsByKode[$kfaKey] = $existingMedId;
+        //     } else {
+        //         $medUuid = 'urn:uuid:' . $this->generateUuid();
+        //         $medUuidsByKode[$kodeDeduplikasi] = $medUuid;
+        //         if ($localKode) $medUuidsByKode[$localKode] = $medUuid;
+        //         if ($kfaKey) $medUuidsByKode[$kfaKey] = $medUuid;
 
-                $tempObat = $obatItem;
-                $tempObat['KodeObat'] = $kodeDeduplikasi;
+        //         $tempObat = $obatItem;
+        //         $tempObat['KodeObat'] = $kodeDeduplikasi;
 
-                if (method_exists($medicationController, 'buildPayload')) {
-                    $medPayload = $medicationController->buildPayload($tempObat, $encounterId);
-                    if ($medPayload) {
-                        $orgId = $this->getOrgId();
-                        // Identifier Medication menggunakan KodeObat lokal agar 100% unik & spesifik per fasyankes
-                        $medIdentifierValue = !empty($localKode) ? $localKode : $kodeDeduplikasi;
-                        $medPayload['identifier'][0]['value'] = $medIdentifierValue;
-                        $entries[] = [
-                            "fullUrl" => $medUuid,
-                            "resource" => $medPayload,
-                            "request" => [
-                                "method" => "POST",
-                                "url" => "Medication",
-                                "ifNoneExist" => "identifier=http://sys-ids.kemkes.go.id/medication/" . $orgId . "|" . $medIdentifierValue
-                            ]
-                        ];
-                        $entryKeys[] = ['type' => 'Medication', 'subtype' => 'medication', 'local_id' => $localKode];
-                    }
-                }
-            }
-        }
+        //         if (method_exists($medicationController, 'buildPayload')) {
+        //             $medPayload = $medicationController->buildPayload($tempObat, $encounterId);
+        //             if ($medPayload) {
+        //                 $orgId = $this->getOrgId();
+        //                 // Identifier Medication menggunakan KodeObat lokal agar 100% unik & spesifik per fasyankes
+        //                 $medIdentifierValue = !empty($localKode) ? $localKode : $kodeDeduplikasi;
+        //                 $medPayload['identifier'][0]['value'] = $medIdentifierValue;
+        //                 $entries[] = [
+        //                     "fullUrl" => $medUuid,
+        //                     "resource" => $medPayload,
+        //                     "request" => [
+        //                         "method" => "POST",
+        //                         "url" => "Medication",
+        //                         "ifNoneExist" => "identifier=http://sys-ids.kemkes.go.id/medication/" . $orgId . "|" . $medIdentifierValue
+        //                     ]
+        //                 ];
+        //                 $entryKeys[] = ['type' => 'Medication', 'subtype' => 'medication', 'local_id' => $localKode];
+        //             }
+        //         }
+        //     }
+        // }
 
         // 2. Process MedicationRequest (Prescription drafts from Temp)
         $medRequestUuids = []; // Map (NoResep_KodeObat) or KodeObat -> MedicationRequest UUID
