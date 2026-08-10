@@ -520,10 +520,29 @@ class SatuSehat extends BaseController
         $entries = [];
         $entryKeys = [];
 
+        // Ambil daftar resource subtype yang sudah pernah berhasil dikirim untuk Regno ini
+        $sentResourcesModel = new SatuSehatLogModel();
+        $sentRows = $sentResourcesModel->where('Regno', $row['Regno'])->findAll();
+        $sentSubtypes = [];
+        foreach ($sentRows as $sr) {
+            $typeKey = $sr['resourceType'] . ':' . ($sr['resourceSubType'] ?? '');
+            $sentSubtypes[$typeKey] = $sr['resourceID'];
+        }
+
         // ── 3. Helper: tambah entry ke bundle ────────────────────────────────
-        $addEntry = function ($payload, $key, $method = 'POST', $url = null, $fixRef = true) use (&$entries, &$entryKeys, $encounterUuid, $alreadySentEncounterId) {
+        $addEntry = function ($payload, $key, $method = 'POST', $url = null, $fixRef = true, $customFullUrl = null) use (&$entries, &$entryKeys, $encounterUuid, $alreadySentEncounterId, $sentSubtypes) {
             if (!$payload)
                 return;
+
+            $type = $key['type'] ?? ($payload['resourceType'] ?? '');
+            $subtype = $key['subtype'] ?? '';
+            $sentKey = $type . ':' . $subtype;
+
+            // Skip jika subtype resource ini sudah pernah berhasil dikirim & dicatat di DB untuk Regno ini
+            if (!empty($subtype) && isset($sentSubtypes[$sentKey])) {
+                return;
+            }
+
             if (!$url)
                 $url = $payload['resourceType'];
 
@@ -533,7 +552,7 @@ class SatuSehat extends BaseController
             }
 
             $entries[] = [
-                'fullUrl' => 'urn:uuid:' . $this->generateUuid(),
+                'fullUrl' => $customFullUrl ?: ('urn:uuid:' . $this->generateUuid()),
                 'resource' => $payload,
                 'request' => ['method' => $method, 'url' => $url],
             ];
@@ -748,7 +767,7 @@ class SatuSehat extends BaseController
         $medUuidsByKode = []; // Hashmap untuk deduplikasi resource Medication
 
         // 1. Register unique Medication resources from both temp and dispense arrays
-        $allObats = array_merge($obatsTemp, $obatsDispense);
+        // $allObats = array_merge($obatsTemp, $obatsDispense);
         // foreach ($allObats as $index => $obatItem) {
         //     $kfaKey    = trim($obatItem['KFA'] ?? '');
         //     $localKode = trim($obatItem['KodeObat'] ?? '');
@@ -845,12 +864,8 @@ class SatuSehat extends BaseController
             if (method_exists($medicationRequestController, 'buildPayload')) {
                 $reqPayload = $medicationRequestController->buildPayload($reqData, $encounterId);
                 if ($reqPayload) {
-                    $entries[] = [
-                        "fullUrl" => $reqUuid,
-                        "resource" => $reqPayload,
-                        "request" => ["method" => "POST", "url" => "MedicationRequest"]
-                    ];
-                    $entryKeys[] = ['type' => 'MedicationRequest', 'subtype' => 'medication_request'];
+                    $mrSubtype = 'medreq_' . ($noResep ?: 'no') . '_' . $itemKode;
+                    $addEntry($reqPayload, ['type' => 'MedicationRequest', 'subtype' => $mrSubtype, 'local_id' => $itemKode], 'POST', 'MedicationRequest', true, $reqUuid);
                 }
             }
         }
@@ -894,12 +909,8 @@ class SatuSehat extends BaseController
                 if (method_exists($medicationRequestController, 'buildPayload')) {
                     $reqPayload = $medicationRequestController->buildPayload($reqData, $encounterId);
                     if ($reqPayload) {
-                        $entries[] = [
-                            "fullUrl" => $reqUuid,
-                            "resource" => $reqPayload,
-                            "request" => ["method" => "POST", "url" => "MedicationRequest"]
-                        ];
-                        $entryKeys[] = ['type' => 'MedicationRequest', 'subtype' => 'medication_request_auto'];
+                        $mrSubtype = 'medreq_' . ($noResep ?: 'no') . '_' . $itemKode;
+                        $addEntry($reqPayload, ['type' => 'MedicationRequest', 'subtype' => $mrSubtype, 'local_id' => $itemKode], 'POST', 'MedicationRequest', true, $reqUuid);
                     }
                 }
             }
@@ -910,7 +921,8 @@ class SatuSehat extends BaseController
             if (method_exists($medicationDispenseController, 'buildPayload')) {
                 $dispensePayload = $medicationDispenseController->buildPayload($dispenseData, $encounterId, $reqUuid);
                 if ($dispensePayload) {
-                    $addEntry($dispensePayload, ['type' => 'MedicationDispense', 'subtype' => 'medication_dispense']);
+                    $mdSubtype = 'meddisp_' . ($noResep ?: 'no') . '_' . $itemKode;
+                    $addEntry($dispensePayload, ['type' => 'MedicationDispense', 'subtype' => $mdSubtype, 'local_id' => $itemKode]);
                 }
             }
         }
@@ -1476,18 +1488,29 @@ class SatuSehat extends BaseController
                             $matchedEntries = $this->findMatchingResourceOnKemkes($resourceType, $identifierQuery, $row);
 
                             if (!empty($matchedEntries)) {
-                                // Jika ini Encounter dan ID ada di Kemkes, update DB lokal & set flag cleanedUp untuk retry
-                                if ($resourceType === 'Encounter') {
-                                    $existingEncId = $matchedEntries[0]['resource']['id'] ?? null;
-                                    if ($existingEncId) {
+                                $existingResId = $matchedEntries[0]['resource']['id'] ?? null;
+                                if ($existingResId) {
+                                    // Catat ID resource yang sudah ada di Kemkes ke log lokal
+                                    $matchedSubtype = $entryKeys[array_search($entry, $entries, true)]['subtype'] ?? '';
+                                    try {
+                                        $logModel = new SatuSehatLogModel();
+                                        $logModel->insert([
+                                            'Regno' => $row['Regno'],
+                                            'resourceType' => $resourceType,
+                                            'resourceSubType' => $matchedSubtype,
+                                            'resourceID' => $existingResId,
+                                        ]);
+                                    } catch (\Throwable $t) {}
+
+                                    if ($resourceType === 'Encounter') {
                                         $registerModel = new Register();
-                                        $registerModel->updateEncounter($row['Regno'], $row['Medrec'], $existingEncId);
-                                        $row['EcounterSatuSehat'] = $existingEncId;
-                                        $cleanedUp = true;
+                                        $registerModel->updateEncounter($row['Regno'], $row['Medrec'], $existingResId);
+                                        $row['EcounterSatuSehat'] = $existingResId;
                                     }
+                                    $cleanedUp = true;
                                 }
 
-                                // Jika lebih dari 1 match! Hapus salah satu agar menyisakan tepat satu resource
+                                // Jika lebih dari 1 match! Hapus sisa duplikat
                                 if (count($matchedEntries) > 1) {
                                     for ($i = 1; $i < count($matchedEntries); $i++) {
                                         $dupId = $matchedEntries[$i]['resource']['id'] ?? null;
