@@ -741,186 +741,179 @@ class SatuSehat extends BaseController
 
         $obats = !empty($obatsTemp) ? $obatsTemp : $obatsDispense;
 
-        // $medicationController = new Medication($this->service);
-        // $medicationRequestController = new MedicationRequest($this->service);
-        // $medicationDispenseController = new MedicationDispense($this->service);
+        $medicationController = new Medication($this->service);
+        $medicationRequestController = new MedicationRequest($this->service);
+        $medicationDispenseController = new MedicationDispense($this->service);
 
-        // $medUuidsByKode = []; // Hashmap untuk deduplikasi resoure Medication
+        $medUuidsByKode = []; // Hashmap untuk deduplikasi resource Medication
 
-        // // Register unique Medication resources from both temp and dispense arrays
-        // $allObats = array_merge($obatsTemp, $obatsDispense);
-        // foreach ($allObats as $index => $obatItem) {
-        //     $kfaKey    = trim($obatItem['KFA'] ?? '');
-        //     $localKode = trim($obatItem['KodeObat'] ?? '');
-        //     if (empty($kfaKey)) {
-        //         continue; // Skip jika obat/alkes belum ada mapping KFA di Master Obat
-        //     }
-        //     $kodeDeduplikasi = $localKode !== '' ? $localKode : ($kfaKey !== '' ? $kfaKey : $index);
+        // 1. Register unique Medication resources from both temp and dispense arrays
+        $allObats = array_merge($obatsTemp, $obatsDispense);
+        foreach ($allObats as $index => $obatItem) {
+            $kfaKey    = trim($obatItem['KFA'] ?? '');
+            $localKode = trim($obatItem['KodeObat'] ?? '');
 
-        //     if (isset($medUuidsByKode[$kodeDeduplikasi]) || ($localKode && isset($medUuidsByKode[$localKode]))) {
-        //         continue;
-        //     }
+            // Skip jika KFA kosong atau tidak valid (harus numerik, bukan kode barang lokal)
+            if (empty($kfaKey) || !is_numeric($kfaKey)) {
+                continue;
+            }
 
-        //     $existingMedId = !empty($obatItem['Medication_id_satu_sehat'])
-        //         ? $obatItem['Medication_id_satu_sehat']
-        //         : $this->resolveMedicationProactively($kfaKey, $localKode);
+            $kodeDeduplikasi = !empty($localKode) ? $localKode : $kfaKey;
 
-        //     if (!empty($existingMedId)) {
-        //         // Medication sudah ada di DB lokal atau Kemkes -> gunakan ID aslinya, tidak perlu POST di bundle
-        //         $medUuidsByKode[$kodeDeduplikasi] = $existingMedId;
-        //         if ($localKode) {
-        //             $medUuidsByKode[$localKode] = $existingMedId;
-        //         }
-        //         if ($kfaKey) {
-        //             $medUuidsByKode[$kfaKey] = $existingMedId;
-        //         }
-        //     } else {
-        //         $medUuid = 'urn:uuid:' . $this->generateUuid();
-        //         $medUuidsByKode[$kodeDeduplikasi] = $medUuid;
-        //         if ($localKode) {
-        //             $medUuidsByKode[$localKode] = $medUuid;
-        //         }
-        //         if ($kfaKey) {
-        //             $medUuidsByKode[$kfaKey] = $medUuid;
-        //         }
+            if (isset($medUuidsByKode[$kodeDeduplikasi]) || ($localKode && isset($medUuidsByKode[$localKode]))) {
+                continue;
+            }
 
-        //         $tempObat = $obatItem;
-        //         $tempObat['KodeObat'] = $kodeDeduplikasi;
+            $existingMedId = !empty($obatItem['Medication_id_satu_sehat'])
+                ? $obatItem['Medication_id_satu_sehat']
+                : $this->resolveMedicationProactively($kfaKey, $localKode);
 
-        //         if (method_exists($medicationController, 'buildPayload')) {
-        //             $medPayload = $medicationController->buildPayload($tempObat, $encounterId);
-        //             if ($medPayload) {
-        //                 $orgId = $this->getOrgId();
-        //                 // Identifier Medication menggunakan KodeObat lokal agar 100% unik & spesifik per fasyankes
-        //                 $medIdentifierValue = !empty($localKode) ? $localKode : $kodeDeduplikasi;
-        //                 $medPayload['identifier'][0]['value'] = $medIdentifierValue;
-        //                 $entries[] = [
-        //                     "fullUrl" => $medUuid,
-        //                     "resource" => $medPayload,
-        //                     "request" => [
-        //                         "method" => "POST",
-        //                         "url" => "Medication",
-        //                         "ifNoneExist" => "identifier=http://sys-ids.kemkes.go.id/medication/" . $orgId . "|" . $medIdentifierValue
-        //                     ]
-        //                 ];
-        //                 $entryKeys[] = ['type' => 'Medication', 'subtype' => 'medication', 'local_id' => $localKode];
-        //             }
-        //         }
-        //     }
-        // }
+            if (!empty($existingMedId)) {
+                // Medication sudah ada di DB lokal atau Kemkes -> gunakan ID aslinya, tidak perlu POST di bundle
+                $medUuidsByKode[$kodeDeduplikasi] = $existingMedId;
+                if ($localKode) $medUuidsByKode[$localKode] = $existingMedId;
+                if ($kfaKey) $medUuidsByKode[$kfaKey] = $existingMedId;
+            } else {
+                $medUuid = 'urn:uuid:' . $this->generateUuid();
+                $medUuidsByKode[$kodeDeduplikasi] = $medUuid;
+                if ($localKode) $medUuidsByKode[$localKode] = $medUuid;
+                if ($kfaKey) $medUuidsByKode[$kfaKey] = $medUuid;
 
-        // // Process MedicationRequest (Prescription drafts from Temp)
-        // $medRequestUuids = []; // Map (NoResep_KodeObat) or KodeObat -> MedicationRequest UUID
-        // foreach ($obatsTemp as $index => $obat) {
-        //     $kfaKey = trim($obat['KFA'] ?? '');
-        //     if (empty($kfaKey)) {
-        //         continue; // Skip if KFA code is not mapped
-        //     }
-        //     $obat['Urutan'] = $index + 1;
-        //     $itemKode = trim($obat['KodeObat'] ?? '');
-        //     $medUuid = $medUuidsByKode[$itemKode] ?? ($medUuidsByKode[$kfaKey] ?? ($medUuidsByKode[$kodeDeduplikasi] ?? null));
-        //     if (!$medUuid) {
-        //         $medUuid = 'urn:uuid:' . $this->generateUuid();
-        //     }
+                $tempObat = $obatItem;
+                $tempObat['KodeObat'] = $kodeDeduplikasi;
 
-        //     $reqUuid = 'urn:uuid:' . $this->generateUuid();
+                if (method_exists($medicationController, 'buildPayload')) {
+                    $medPayload = $medicationController->buildPayload($tempObat, $encounterId);
+                    if ($medPayload) {
+                        $orgId = $this->getOrgId();
+                        // Identifier Medication menggunakan KodeObat lokal agar 100% unik & spesifik per fasyankes
+                        $medIdentifierValue = !empty($localKode) ? $localKode : $kodeDeduplikasi;
+                        $medPayload['identifier'][0]['value'] = $medIdentifierValue;
+                        $entries[] = [
+                            "fullUrl" => $medUuid,
+                            "resource" => $medPayload,
+                            "request" => [
+                                "method" => "POST",
+                                "url" => "Medication",
+                                "ifNoneExist" => "identifier=http://sys-ids.kemkes.go.id/medication/" . $orgId . "|" . $medIdentifierValue
+                            ]
+                        ];
+                        $entryKeys[] = ['type' => 'Medication', 'subtype' => 'medication', 'local_id' => $localKode];
+                    }
+                }
+            }
+        }
+
+        // 2. Process MedicationRequest (Prescription drafts from Temp)
+        $medRequestUuids = []; // Map (NoResep_KodeObat) or KodeObat -> MedicationRequest UUID
+        foreach ($obatsTemp as $index => $obat) {
+            $kfaKey = trim($obat['KFA'] ?? '');
+            if (empty($kfaKey) || !is_numeric($kfaKey)) {
+                continue; // Skip item tanpa KFA valid
+            }
+            $obat['Urutan'] = $index + 1;
+            $itemKode = trim($obat['KodeObat'] ?? '');
+            $kodeDeduplikasi = !empty($itemKode) ? $itemKode : $kfaKey;
+
+            $medUuid = $medUuidsByKode[$itemKode] ?? ($medUuidsByKode[$kfaKey] ?? ($medUuidsByKode[$kodeDeduplikasi] ?? null));
+            if (!$medUuid) {
+                continue;
+            }
+
+            $reqUuid = 'urn:uuid:' . $this->generateUuid();
             
-        //     // Map the MedicationRequest UUID
-        //     $noResep = trim($obat['NoResep'] ?? '');
-        //     $itemKode = trim($obat['KodeObat'] ?? '');
-        //     $mapKey = $noResep . '_' . $itemKode;
-        //     $medRequestUuids[$mapKey] = $reqUuid;
-        //     if (!isset($medRequestUuids[$itemKode])) {
-        //         $medRequestUuids[$itemKode] = $reqUuid;
-        //     }
+            // Map the MedicationRequest UUID
+            $noResep = trim($obat['NoResep'] ?? '');
+            $mapKey = $noResep . '_' . $itemKode;
+            $medRequestUuids[$mapKey] = $reqUuid;
+            if ($itemKode && !isset($medRequestUuids[$itemKode])) {
+                $medRequestUuids[$itemKode] = $reqUuid;
+            }
 
-        //     $reqData = array_merge($row, $obat);
-        //     $reqData['MedicationId'] = $medUuid;
-        //     $reqData['TglResep'] = $obat['TglResep'] ?? ($obat['RegDate'] ?? ($obat['Regdate'] ?? null));
-        //     $reqData['AturanPakai'] = $obat['AturanPakai'] ?? null;
-        //     $notes = [];
-        //     if (!empty($obat['NoteCaraMinumObat']))
-        //         $notes[] = $obat['NoteCaraMinumObat'];
-        //     if (!empty($obat['NoteSigna']))
-        //         $notes[] = $obat['NoteSigna'];
-        //     $reqData['CatatanMinum'] = implode(', ', $notes);
-        //     $reqData['InstruksiPasien'] = $obat['KeteranganPakai'] ?? null;
-        //     $reqData['JumlahObat'] = $obat['Qty'] ?? null;
-        //     $reqData['SatuanObat'] = $obat['Satuan'] ?? 'TAB';
+            $reqData = array_merge($row, $obat);
+            $reqData['MedicationId'] = $medUuid;
+            $reqData['TglResep'] = $obat['TglResep'] ?? ($obat['RegDate'] ?? ($obat['Regdate'] ?? null));
+            $reqData['AturanPakai'] = $obat['AturanPakai'] ?? null;
+            $notes = [];
+            if (!empty($obat['NoteCaraMinumObat'])) $notes[] = $obat['NoteCaraMinumObat'];
+            if (!empty($obat['NoteSigna'])) $notes[] = $obat['NoteSigna'];
+            $reqData['CatatanMinum'] = implode(', ', $notes);
+            $reqData['InstruksiPasien'] = $obat['KeteranganPakai'] ?? null;
+            $reqData['JumlahObat'] = $obat['Qty'] ?? null;
+            $reqData['SatuanObat'] = $obat['Satuan'] ?? 'TAB';
 
-        //     if (method_exists($medicationRequestController, 'buildPayload')) {
-        //         $reqPayload = $medicationRequestController->buildPayload($reqData, $encounterId);
-        //         if ($reqPayload) {
-        //             $entries[] = [
-        //                 "fullUrl" => $reqUuid,
-        //                 "resource" => $reqPayload,
-        //                 "request" => ["method" => "POST", "url" => "MedicationRequest"]
-        //             ];
-        //             $entryKeys[] = ['type' => 'MedicationRequest', 'subtype' => 'medication_request'];
-        //         }
-        //     }
-        // }
+            if (method_exists($medicationRequestController, 'buildPayload')) {
+                $reqPayload = $medicationRequestController->buildPayload($reqData, $encounterId);
+                if ($reqPayload) {
+                    $entries[] = [
+                        "fullUrl" => $reqUuid,
+                        "resource" => $reqPayload,
+                        "request" => ["method" => "POST", "url" => "MedicationRequest"]
+                    ];
+                    $entryKeys[] = ['type' => 'MedicationRequest', 'subtype' => 'medication_request'];
+                }
+            }
+        }
 
-        // // Process MedicationDispense (Dispensed medicines from Real Apotek)
-        // foreach ($obatsDispense as $index => $obat) {
-        //     $kfaKey = trim($obat['KFA'] ?? '');
-        //     if (empty($kfaKey)) {
-        //         continue; // Skip if KFA code is not mapped
-        //     }
-        //     $itemKode = trim($obat['KodeObat'] ?? '');
-        //     $medUuid = $medUuidsByKode[$itemKode] ?? ($medUuidsByKode[$kfaKey] ?? ($medUuidsByKode[$kodeDeduplikasi] ?? null));
-        //     if (!$medUuid) {
-        //         $medUuid = 'urn:uuid:' . $this->generateUuid();
-        //     }
+        // 3. Process MedicationDispense (Dispensed medicines from Real Apotek)
+        foreach ($obatsDispense as $index => $obat) {
+            $kfaKey = trim($obat['KFA'] ?? '');
+            if (empty($kfaKey) || !is_numeric($kfaKey)) {
+                continue; // Skip item tanpa KFA valid
+            }
+            $itemKode = trim($obat['KodeObat'] ?? '');
+            $kodeDeduplikasi = !empty($itemKode) ? $itemKode : $kfaKey;
 
-        //     // Find matching MedicationRequest UUID
-        //     $noResep = trim($obat['NoResep'] ?? '');
-        //     $itemKode = trim($obat['KodeObat'] ?? '');
-        //     $mapKey = $noResep . '_' . $itemKode;
-        //     $reqUuid = $medRequestUuids[$mapKey] ?? ($medRequestUuids[$itemKode] ?? null);
+            $medUuid = $medUuidsByKode[$itemKode] ?? ($medUuidsByKode[$kfaKey] ?? ($medUuidsByKode[$kodeDeduplikasi] ?? null));
+            if (!$medUuid) {
+                continue;
+            }
 
-        //     if (!$reqUuid) {
-        //         // Generate a new MedicationRequest on the fly so MedicationDispense has its mandatory reference
-        //         $reqUuid = 'urn:uuid:' . $this->generateUuid();
-        //         $medRequestUuids[$mapKey] = $reqUuid;
+            // Find matching MedicationRequest UUID
+            $noResep = trim($obat['NoResep'] ?? '');
+            $mapKey = $noResep . '_' . $itemKode;
+            $reqUuid = $medRequestUuids[$mapKey] ?? ($medRequestUuids[$itemKode] ?? null);
 
-        //         $reqData = array_merge($row, $obat);
-        //         $reqData['MedicationId'] = $medUuid;
-        //         $reqData['TglResep'] = $obat['TglResep'] ?? ($obat['RegDate'] ?? ($obat['Regdate'] ?? null));
-        //         $reqData['AturanPakai'] = $obat['AturanPakai'] ?? null;
-        //         $notes = [];
-        //         if (!empty($obat['NoteCaraMinumObat']))
-        //             $notes[] = $obat['NoteCaraMinumObat'];
-        //         if (!empty($obat['NoteSigna']))
-        //             $notes[] = $obat['NoteSigna'];
-        //         $reqData['CatatanMinum'] = implode(', ', $notes);
-        //         $reqData['InstruksiPasien'] = $obat['KeteranganPakai'] ?? null;
-        //         $reqData['JumlahObat'] = $obat['Qty'] ?? null;
-        //         $reqData['SatuanObat'] = $obat['Satuan'] ?? 'TAB';
+            if (!$reqUuid) {
+                // Generate a new MedicationRequest on the fly so MedicationDispense has its mandatory reference
+                $reqUuid = 'urn:uuid:' . $this->generateUuid();
+                $medRequestUuids[$mapKey] = $reqUuid;
 
-        //         if (method_exists($medicationRequestController, 'buildPayload')) {
-        //             $reqPayload = $medicationRequestController->buildPayload($reqData, $encounterId);
-        //             if ($reqPayload) {
-        //                 $entries[] = [
-        //                     "fullUrl" => $reqUuid,
-        //                     "resource" => $reqPayload,
-        //                     "request" => ["method" => "POST", "url" => "MedicationRequest"]
-        //                 ];
-        //                 $entryKeys[] = ['type' => 'MedicationRequest', 'subtype' => 'medication_request_auto'];
-        //             }
-        //         }
-        //     }
+                $reqData = array_merge($row, $obat);
+                $reqData['MedicationId'] = $medUuid;
+                $reqData['TglResep'] = $obat['TglResep'] ?? ($obat['RegDate'] ?? ($obat['Regdate'] ?? null));
+                $reqData['AturanPakai'] = $obat['AturanPakai'] ?? null;
+                $notes = [];
+                if (!empty($obat['NoteCaraMinumObat'])) $notes[] = $obat['NoteCaraMinumObat'];
+                if (!empty($obat['NoteSigna'])) $notes[] = $obat['NoteSigna'];
+                $reqData['CatatanMinum'] = implode(', ', $notes);
+                $reqData['InstruksiPasien'] = $obat['KeteranganPakai'] ?? null;
+                $reqData['JumlahObat'] = $obat['Qty'] ?? null;
+                $reqData['SatuanObat'] = $obat['Satuan'] ?? 'TAB';
 
-        //     $dispenseData = array_merge($row, $obat);
-        //     $dispenseData['MedicationId'] = $medUuid;
+                if (method_exists($medicationRequestController, 'buildPayload')) {
+                    $reqPayload = $medicationRequestController->buildPayload($reqData, $encounterId);
+                    if ($reqPayload) {
+                        $entries[] = [
+                            "fullUrl" => $reqUuid,
+                            "resource" => $reqPayload,
+                            "request" => ["method" => "POST", "url" => "MedicationRequest"]
+                        ];
+                        $entryKeys[] = ['type' => 'MedicationRequest', 'subtype' => 'medication_request_auto'];
+                    }
+                }
+            }
 
-        //     if (method_exists($medicationDispenseController, 'buildPayload')) {
-        //         $dispensePayload = $medicationDispenseController->buildPayload($dispenseData, $encounterId, $reqUuid);
-        //         if ($dispensePayload) {
-        //             $addEntry($dispensePayload, ['type' => 'MedicationDispense', 'subtype' => 'medication_dispense']);
-        //         }
-        //     }
-        // }
+            $dispenseData = array_merge($row, $obat);
+            $dispenseData['MedicationId'] = $medUuid;
+
+            if (method_exists($medicationDispenseController, 'buildPayload')) {
+                $dispensePayload = $medicationDispenseController->buildPayload($dispenseData, $encounterId, $reqUuid);
+                if ($dispensePayload) {
+                    $addEntry($dispensePayload, ['type' => 'MedicationDispense', 'subtype' => 'medication_dispense']);
+                }
+            }
+        }
 
         // 11. Labs (The Other Big One)
         $labModel = new LaboratoriumModel();
