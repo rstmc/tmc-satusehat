@@ -750,38 +750,49 @@ class SatuSehat extends BaseController
         // Register unique Medication resources from both temp and dispense arrays
         $allObats = array_merge($obatsTemp, $obatsDispense);
         foreach ($allObats as $index => $obatItem) {
-            $kfaKey = trim($obatItem['KFA'] ?? '');
-            if (empty($kfaKey)) {
+            $kfaKey    = trim($obatItem['KFA'] ?? '');
+            $localKode = trim($obatItem['KodeObat'] ?? '');
+            if (empty($kfaKey) && empty($localKode)) {
                 continue;
             }
-            $kodeDeduplikasi = $kfaKey !== '' ? $kfaKey : (trim($obatItem['KodeObat'] ?? '') ?: $index);
+            $kodeDeduplikasi = $localKode !== '' ? $localKode : ($kfaKey !== '' ? $kfaKey : $index);
 
-            if (isset($medUuidsByKode[$kodeDeduplikasi])) {
+            if (isset($medUuidsByKode[$kodeDeduplikasi]) || ($localKode && isset($medUuidsByKode[$localKode]))) {
                 continue;
             }
 
             $existingMedId = !empty($obatItem['Medication_id_satu_sehat'])
                 ? $obatItem['Medication_id_satu_sehat']
-                : $this->resolveMedicationProactively($kodeDeduplikasi, $obatItem['KodeObat'] ?? null);
+                : $this->resolveMedicationProactively($kfaKey, $localKode);
 
             if (!empty($existingMedId)) {
                 // Medication sudah ada di DB lokal atau Kemkes -> gunakan ID aslinya, tidak perlu POST di bundle
                 $medUuidsByKode[$kodeDeduplikasi] = $existingMedId;
+                if ($localKode) {
+                    $medUuidsByKode[$localKode] = $existingMedId;
+                }
+                if ($kfaKey) {
+                    $medUuidsByKode[$kfaKey] = $existingMedId;
+                }
             } else {
                 $medUuid = 'urn:uuid:' . $this->generateUuid();
                 $medUuidsByKode[$kodeDeduplikasi] = $medUuid;
+                if ($localKode) {
+                    $medUuidsByKode[$localKode] = $medUuid;
+                }
+                if ($kfaKey) {
+                    $medUuidsByKode[$kfaKey] = $medUuid;
+                }
 
-                // Make a copy of the medication and generate a random suffix for KodeObat to prevent Rule 20002
                 $tempObat = $obatItem;
-                $tempObat['KodeObat'] = $kodeDeduplikasi . '-' . mt_rand(10000, 99999);
+                $tempObat['KodeObat'] = $kodeDeduplikasi;
 
                 if (method_exists($medicationController, 'buildPayload')) {
                     $medPayload = $medicationController->buildPayload($tempObat, $encounterId);
                     if ($medPayload) {
                         $orgId = $this->getOrgId();
-                        // ifNoneExist identifier harus stabil (tidak random) agar match saat push ulang.
-                        // Gunakan kfa code (kodeDeduplikasi) sebagai nilai identifier
-                        $medIdentifierValue = $kodeDeduplikasi;
+                        // Identifier Medication menggunakan KodeObat lokal agar 100% unik & spesifik per fasyankes
+                        $medIdentifierValue = !empty($localKode) ? $localKode : $kodeDeduplikasi;
                         $medPayload['identifier'][0]['value'] = $medIdentifierValue;
                         $entries[] = [
                             "fullUrl" => $medUuid,
@@ -792,7 +803,7 @@ class SatuSehat extends BaseController
                                 "ifNoneExist" => "identifier=http://sys-ids.kemkes.go.id/medication/" . $orgId . "|" . $medIdentifierValue
                             ]
                         ];
-                        $entryKeys[] = ['type' => 'Medication', 'subtype' => 'medication', 'local_id' => $obatItem['KodeObat'] ?? ''];
+                        $entryKeys[] = ['type' => 'Medication', 'subtype' => 'medication', 'local_id' => $localKode];
                     }
                 }
             }
@@ -806,9 +817,8 @@ class SatuSehat extends BaseController
                 continue; // Skip if KFA code is not mapped
             }
             $obat['Urutan'] = $index + 1;
-            $kodeDeduplikasi = $kfaKey !== '' ? $kfaKey : (trim($obat['KodeObat'] ?? '') ?: $index);
-
-            $medUuid = $medUuidsByKode[$kodeDeduplikasi] ?? null;
+            $itemKode = trim($obat['KodeObat'] ?? '');
+            $medUuid = $medUuidsByKode[$itemKode] ?? ($medUuidsByKode[$kfaKey] ?? ($medUuidsByKode[$kodeDeduplikasi] ?? null));
             if (!$medUuid) {
                 $medUuid = 'urn:uuid:' . $this->generateUuid();
             }
@@ -857,10 +867,8 @@ class SatuSehat extends BaseController
             if (empty($kfaKey)) {
                 continue; // Skip if KFA code is not mapped
             }
-            $obat['Urutan'] = $index + 1;
-            $kodeDeduplikasi = $kfaKey !== '' ? $kfaKey : (trim($obat['KodeObat'] ?? '') ?: $index);
-
-            $medUuid = $medUuidsByKode[$kodeDeduplikasi] ?? null;
+            $itemKode = trim($obat['KodeObat'] ?? '');
+            $medUuid = $medUuidsByKode[$itemKode] ?? ($medUuidsByKode[$kfaKey] ?? ($medUuidsByKode[$kodeDeduplikasi] ?? null));
             if (!$medUuid) {
                 $medUuid = 'urn:uuid:' . $this->generateUuid();
             }
@@ -1761,51 +1769,84 @@ class SatuSehat extends BaseController
     private function resolveMedicationProactively(string $kfaCode, ?string $localKodeObat = null): ?string
     {
         $orgId = $this->getOrgId();
-        if (empty($kfaCode) || empty($orgId)) {
+        if (empty($orgId)) {
             return null;
         }
 
-        $identifierQuery = 'http://sys-ids.kemkes.go.id/medication/' . $orgId . '|' . $kfaCode;
+        // 1. Cek DB lokal MasterObat terlebih dahulu jika localKodeObat tersedia
+        if (!empty($localKodeObat)) {
+            try {
+                $obatModel = new \App\Models\MasterObat();
+                $localObat = $obatModel->find($localKodeObat);
+                if (!empty($localObat['Medication_id_satu_sehat'])) {
+                    return $localObat['Medication_id_satu_sehat'];
+                }
+            } catch (\Throwable $t) {
+                // Ignore DB read errors
+            }
+        }
+
         $foundId = null;
 
-        try {
-            // Search Kemkes by KFA identifier with high _count limit
-            $searchRes = $this->service->get('Medication', [
-                'identifier' => $identifierQuery,
-                '_count'     => 200
-            ]);
+        // 2. Cari di Kemkes via identifier KodeObat lokal (paling spesifik & unik per fasyankes)
+        if (!empty($localKodeObat)) {
+            $identifierQuery = 'http://sys-ids.kemkes.go.id/medication/' . $orgId . '|' . $localKodeObat;
+            try {
+                $searchRes = $this->service->get('Medication', [
+                    'identifier' => $identifierQuery,
+                    '_count'     => 10
+                ]);
+                if (!empty($searchRes['entry'][0]['resource']['id'])) {
+                    $foundId = $searchRes['entry'][0]['resource']['id'];
+                    try {
+                        (new \App\Models\MasterObat())->update($localKodeObat, [
+                            'Medication_id_satu_sehat' => $foundId
+                        ]);
+                    } catch (\Throwable $t) {}
+                    return $foundId;
+                }
+            } catch (\Throwable $e) {
+                log_message('error', "Medication resolve by KodeObat {$localKodeObat} error: " . $e->getMessage());
+            }
+        }
 
-            if (!empty($searchRes['entry']) && is_array($searchRes['entry'])) {
-                $foundId = $searchRes['entry'][0]['resource']['id'] ?? null;
+        // 3. Fallback: Cari di Kemkes via KFA identifier
+        if (!empty($kfaCode)) {
+            $identifierQuery = 'http://sys-ids.kemkes.go.id/medication/' . $orgId . '|' . $kfaCode;
+            try {
+                $searchRes = $this->service->get('Medication', [
+                    'identifier' => $identifierQuery,
+                    '_count'     => 200
+                ]);
 
-                // Jika terdapat duplikat > 1 di Kemkes, hapus sisa duplikatnya ($i = 1..N)
-                if (count($searchRes['entry']) > 1) {
-                    for ($i = 1; $i < count($searchRes['entry']); $i++) {
-                        $dupId = $searchRes['entry'][$i]['resource']['id'] ?? null;
-                        if ($dupId) {
-                            try {
-                                $this->service->delete('Medication', $dupId);
-                            } catch (\Throwable $t) {
-                                log_message('error', "Failed to delete duplicate Medication {$dupId}: " . $t->getMessage());
+                if (!empty($searchRes['entry']) && is_array($searchRes['entry'])) {
+                    $foundId = $searchRes['entry'][0]['resource']['id'] ?? null;
+
+                    // Jika terdapat duplikat > 1 di Kemkes, hapus sisa duplikatnya ($i = 1..N)
+                    if (count($searchRes['entry']) > 1) {
+                        for ($i = 1; $i < count($searchRes['entry']); $i++) {
+                            $dupId = $searchRes['entry'][$i]['resource']['id'] ?? null;
+                            if ($dupId) {
+                                try {
+                                    $this->service->delete('Medication', $dupId);
+                                } catch (\Throwable $t) {
+                                    log_message('error', "Failed to delete duplicate Medication {$dupId}: " . $t->getMessage());
+                                }
                             }
                         }
                     }
-                }
 
-                // Simpan ID valid pertama ke DB lokal jika localKodeObat tersedia
-                if ($foundId && $localKodeObat) {
-                    try {
-                        $obatModel = new \App\Models\MasterObat();
-                        $obatModel->update($localKodeObat, [
-                            'Medication_id_satu_sehat' => $foundId
-                        ]);
-                    } catch (\Throwable $t) {
-                        log_message('error', "Failed to update local MasterObat {$localKodeObat}: " . $t->getMessage());
+                    if ($foundId && $localKodeObat) {
+                        try {
+                            (new \App\Models\MasterObat())->update($localKodeObat, [
+                                'Medication_id_satu_sehat' => $foundId
+                            ]);
+                        } catch (\Throwable $t) {}
                     }
                 }
+            } catch (\Throwable $e) {
+                log_message('error', "Proactive Medication resolve error for KFA {$kfaCode}: " . $e->getMessage());
             }
-        } catch (\Throwable $e) {
-            log_message('error', "Proactive Medication resolve error for KFA {$kfaCode}: " . $e->getMessage());
         }
 
         return $foundId;
