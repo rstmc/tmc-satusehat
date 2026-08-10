@@ -837,6 +837,7 @@ class SatuSehat extends BaseController
             $itemKode = trim($obat['KodeObat'] ?? '');
 
             $reqUuid = 'urn:uuid:' . $this->generateUuid();
+            $medUuid = $obat['Medication_id_satu_sehat'];
             
             // Map the MedicationRequest UUID
             $noResep = trim($obat['NoResep'] ?? ($obat['BLCode'] ?? ''));
@@ -848,7 +849,7 @@ class SatuSehat extends BaseController
 
             $reqData = array_merge($row, $obat);
             $reqData['NoResep'] = $noResep;
-            $reqData['MedicationId'] = $obat['Medication_id_satu_sehat'];
+            $reqData['MedicationId'] = $medUuid;
             $reqData['TglResep'] = $obat['TglResep'] ?? ($obat['RegDate'] ?? ($obat['Regdate'] ?? null));
             $reqData['AturanPakai'] = $obat['AturanPakai'] ?? null;
             $notes = [];
@@ -879,6 +880,7 @@ class SatuSehat extends BaseController
             $noResep = trim($obat['NoResep'] ?? ($obat['BLCode'] ?? ''));
             $mapKey = $noResep . '_' . $itemKode;
             $reqUuid = $medRequestUuids[$mapKey] ?? ($medRequestUuids[$itemKode] ?? null);
+            $medUuid = $obat['Medication_id_satu_sehat'];
 
             if (!$reqUuid) {
                 // Generate a new MedicationRequest on the fly so MedicationDispense has its mandatory reference
@@ -886,7 +888,7 @@ class SatuSehat extends BaseController
                 $medRequestUuids[$mapKey] = $reqUuid;
 
                 $reqData = array_merge($row, $obat);
-                $reqData['MedicationId'] = $obat['Medication_id_satu_sehat'];
+                $reqData['MedicationId'] = $medUuid;
                 $reqData['TglResep'] = $obat['TglResep'] ?? ($obat['RegDate'] ?? ($obat['Regdate'] ?? null));
                 $reqData['AturanPakai'] = $obat['AturanPakai'] ?? null;
                 $notes = [];
