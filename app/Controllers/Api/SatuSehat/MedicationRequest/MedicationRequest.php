@@ -9,7 +9,7 @@ class MedicationRequest extends MedicationRequestBase
         // Organization ID from environment or config
         $orgId = env('SATUSEHAT_ORG_ID') ?: getenv('SATUSEHAT_ORG_ID') ?: ($_ENV['SATUSEHAT_ORG_ID'] ?? '');
 
-        $identifierValue = $row['NoResep'] ?? '123456788';
+        $identifierValue = !empty($row['NoResep']) ? $row['NoResep'] : ($row['Regno'] ?? 'UNKNOWN');
         $urutan = $row['Urutan'] ?? $row['KodeObat'] ?? '1';
         if (strpos($urutan, '-') !== false) {
             $parts = explode('-', $urutan);
