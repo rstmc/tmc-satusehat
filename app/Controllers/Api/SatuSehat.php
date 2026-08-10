@@ -835,10 +835,15 @@ class SatuSehat extends BaseController
             }
             $obat['Urutan'] = $index + 1;
             $itemKode = trim($obat['KodeObat'] ?? '');
+            $medUuid = $obat['Medication_id_satu_sehat'];
+
+            if (empty($medUuid)) {
+                continue;
+            }
 
             $reqUuid = 'urn:uuid:' . $this->generateUuid();
-            $medUuid = $obat['Medication_id_satu_sehat'];
-            
+          
+
             // Map the MedicationRequest UUID
             $noResep = trim($obat['NoResep'] ?? ($obat['BLCode'] ?? ''));
             $mapKey = $noResep . '_' . $itemKode;
@@ -875,12 +880,17 @@ class SatuSehat extends BaseController
             if (empty($kfaKey) || !is_numeric($kfaKey)) {
                 continue; // Skip item tanpa KFA valid
             }
+            $medUuid = $obat['Medication_id_satu_sehat'];
+
+            if (empty($medUuid)) {
+                continue;
+            }
+
             $itemKode = trim($obat['KodeObat'] ?? '');
             // Find matching MedicationRequest UUID
             $noResep = trim($obat['NoResep'] ?? ($obat['BLCode'] ?? ''));
             $mapKey = $noResep . '_' . $itemKode;
             $reqUuid = $medRequestUuids[$mapKey] ?? ($medRequestUuids[$itemKode] ?? null);
-            $medUuid = $obat['Medication_id_satu_sehat'];
 
             if (!$reqUuid) {
                 // Generate a new MedicationRequest on the fly so MedicationDispense has its mandatory reference
