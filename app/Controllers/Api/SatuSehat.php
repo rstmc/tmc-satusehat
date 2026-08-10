@@ -752,8 +752,8 @@ class SatuSehat extends BaseController
         foreach ($allObats as $index => $obatItem) {
             $kfaKey    = trim($obatItem['KFA'] ?? '');
             $localKode = trim($obatItem['KodeObat'] ?? '');
-            if (empty($kfaKey) && empty($localKode)) {
-                continue;
+            if (empty($kfaKey)) {
+                continue; // Skip jika obat/alkes belum ada mapping KFA di Master Obat
             }
             $kodeDeduplikasi = $localKode !== '' ? $localKode : ($kfaKey !== '' ? $kfaKey : $index);
 
