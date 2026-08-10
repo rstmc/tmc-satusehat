@@ -83,12 +83,18 @@ class LaboratoriumServiceRequest extends ServiceRequestBase
             ]
         ];
 
-        // performer: optional, only send if lab practitioner ID is available
-        if (!empty($row['KdDocSatuSehatLab'])) {
+        // performer: MANDATORY by SATUSEHAT (RuleNumber 10377)
+        $performerDocId = !empty($row['KdDocSatuSehatLab']) 
+            ? $row['KdDocSatuSehatLab'] 
+            : (!empty($row['KdDocSatuSehat']) 
+                ? $row['KdDocSatuSehat'] 
+                : ($row['Practitioner_id'] ?? ''));
+
+        if (!empty($performerDocId)) {
             $payload["performer"] = [
                 [
-                    "reference" => "Practitioner/" . $row['KdDocSatuSehatLab'],
-                    "display" => $row['NmDocLab'] ?? ''
+                    "reference" => "Practitioner/" . $performerDocId,
+                    "display"   => $row['NmDocLab'] ?? ($row['NmDoc'] ?? '')
                 ]
             ];
         }

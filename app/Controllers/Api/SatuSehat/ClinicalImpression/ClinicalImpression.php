@@ -18,10 +18,11 @@ class ClinicalImpression extends ClinicalImpressionBase
         $effectiveDateTime = date('c', $timestamp);
         $date = date('c', $timestamp);
 
-        // Identifier harus stabil (tidak random) agar ifNoneExist bisa deteksi duplikat
+        // Identifier stabil per regno + subtype agar ifNoneExist bisa deteksi duplikat
+        // Gunakan subtype 'clinical_impression' (konsisten dengan entryKeys di SatuSehat.php)
         $identifierValue = !empty($row['NoPrognosis'])
             ? $row['NoPrognosis']
-            : ($row['Regno'] . '-clinical-impression');
+            : ($row['Regno'] . '-clinical_impression');
 
         $prognosisCode    = $row['PrognosisCode']    ?? '170968001';
         $prognosisDisplay = $row['PrognosisDisplay'] ?? 'Prognosis good';

@@ -16,7 +16,8 @@ class MedicationDispense extends MedicationDispenseBase
             $parts = explode('-', $urutan);
             $urutan = $parts[0];
         }
-        $identifierItemValue = $identifierValue . '-' . $urutan;
+        // Suffix '-d' membedakan MedicationDispense dari MedicationRequest yang pakai identifier yang sama
+        $identifierItemValue = $identifierValue . '-' . $urutan . '-d';
 
         // Timestamps
         $dateInput = $row['TglResep'] ?? $row['RegDate'] ?? $row['Regdate'] ?? date('Y-m-d');

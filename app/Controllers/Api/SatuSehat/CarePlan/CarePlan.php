@@ -36,8 +36,17 @@ class CarePlan extends CarePlanBase
         }
         $createdDate = date('c', $ts);
 
+        $orgId = getenv('SATUSEHAT_ORG_ID');
+
         $payload = [
             "resourceType" => "CarePlan",
+            "identifier" => [
+                [
+                    "system" => "http://sys-ids.kemkes.go.id/careplan/" . $orgId,
+                    "use"    => "official",
+                    "value"  => ($row['Regno'] ?? '') . '-care_plan'
+                ]
+            ],
             "status" => $row['Status'] ?? 'active',
             "intent" => $row['Intent'] ?? 'plan',
             "description" => $row['Planning'] ?? 'Rujuk ke RS Rujukan Tumbuh Kembang level 1',

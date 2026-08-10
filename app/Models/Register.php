@@ -45,17 +45,7 @@ class Register extends Model
      */
     private function _encounterBaseSql(string $where): string
     {
-        return "WITH PengkajianTerakhir AS (
-                      SELECT
-                          *,
-                          ROW_NUMBER() OVER (
-                              PARTITION BY Regno
-                              ORDER BY created_at DESC
-                          ) AS rn
-                      FROM dbFORM.dbo.mp_pengkajian_rawat_jalan
-                  )
-
-                  SELECT
+        return "SELECT
                       A.Regno,
                       MAX(A.Medrec) AS Medrec,
                       MAX(CAST(A.Firstname AS NVARCHAR(MAX))) AS Firstname,
@@ -80,17 +70,85 @@ class Register extends Model
                       MAX(CAST(F.Planning AS NVARCHAR(MAX))) AS Planning,
                       '25064002' AS SnomedCodeKeluhanUtama,
                       'Feeling unwell' AS SnomedDisplayKeluhanUtama,
-                      MAX(G.sistol_text) AS Sistole,
-                      MAX(G.diastol_text) AS Diastole,
-                      MAX(G.suhu) AS Suhu,
-                      MAX(G.pernafasan) AS Pernapasan,
-                      MAX(G.saturasi_oxygen) AS SpO2,
-                      MAX(G.nadi) AS Nadi,
-                      MAX(G.tinggi_badan) AS TinggiBadan,
-                      MAX(G.berat_badan) AS BeratBadan,
+
+                      -- ── Vital Signs & Asesmen Rawat Jalan / IGD ──
+                      MAX(COALESCE(
+                          NULLIF(G.sistol_text, ''),
+                          NULLIF(CAST(G_ANAK.td1 AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_GIGI.td1 AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_MAT.td1 AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_TRI.tdsistol_akhir AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_TRI.tdsistol AS VARCHAR(50)), '')
+                      )) AS Sistole,
+
+                      MAX(COALESCE(
+                          NULLIF(G.diastol_text, ''),
+                          NULLIF(CAST(G_ANAK.diastole AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_GIGI.td2 AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_MAT.td2 AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_TRI.tddiastol_akhir AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_TRI.tddiastol AS VARCHAR(50)), '')
+                      )) AS Diastole,
+
+                      MAX(COALESCE(
+                          NULLIF(CAST(G.suhu AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_ANAK.sh AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_GIGI.sh AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_MAT.sh AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_TRI.suhu_akhir AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_TRI.suhu AS VARCHAR(50)), '')
+                      )) AS Suhu,
+
+                      MAX(COALESCE(
+                          NULLIF(CAST(G.pernafasan AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_ANAK.nfs AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_GIGI.nfs AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_MAT.nfs AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_TRI.fknafas_akhir AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_TRI.fknafas AS VARCHAR(50)), '')
+                      )) AS Pernapasan,
+
+                      MAX(COALESCE(
+                          NULLIF(CAST(G.saturasi_oxygen AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_ANAK.spo2 AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_GIGI.spo2 AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_MAT.spo2 AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_TRI.sp_akhir AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_TRI.sp AS VARCHAR(50)), '')
+                      )) AS SpO2,
+
+                      MAX(COALESCE(
+                          NULLIF(CAST(G.nadi AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_ANAK.nd AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_GIGI.nd AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_MAT.nd AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_TRI.fknadi_akhir AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_TRI.fknadi AS VARCHAR(50)), '')
+                      )) AS Nadi,
+
+                      MAX(COALESCE(
+                          NULLIF(CAST(G.tinggi_badan AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_ANAK.tgi AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_GIGI.tb AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_MAT.tb AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_TRI.tb AS VARCHAR(50)), '')
+                      )) AS TinggiBadan,
+
+                      MAX(COALESCE(
+                          NULLIF(CAST(G.berat_badan AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_ANAK.bb AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_GIGI.bb AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_MAT.bb AS VARCHAR(50)), ''),
+                          NULLIF(CAST(G_TRI.bb AS VARCHAR(50)), '')
+                      )) AS BeratBadan,
+
                       MAX(G.riwayat_alergi) AS RiwayatAlergi,
                       MAX(G.riwayat_alergi_opsi) AS RiwayatAlergiOpsi,
-                      MAX(G.reaksi_alergi) AS ReaksiAlergi,
+                      MAX(COALESCE(
+                          NULLIF(G.reaksi_alergi, ''),
+                          NULLIF(G_TRI.alrglain, '')
+                      )) AS ReaksiAlergi,
+
                       NULL AS TglPulang,
                       NULL AS JamPulang
                   FROM Register A
@@ -115,15 +173,36 @@ class Register extends Model
                       AND F.KdDoc COLLATE DATABASE_DEFAULT
                          = A.KdDoc COLLATE DATABASE_DEFAULT
                       AND F.DiisiOleh = 'dokter'
-                  LEFT JOIN PengkajianTerakhir G
-                      ON G.Regno COLLATE DATABASE_DEFAULT
-                         = A.Regno COLLATE DATABASE_DEFAULT
-                      AND G.rn = 1
+                  OUTER APPLY (
+                      SELECT TOP 1 * FROM dbFORM.dbo.mp_pengkajian_rawat_jalan
+                      WHERE Regno COLLATE DATABASE_DEFAULT = A.Regno COLLATE DATABASE_DEFAULT
+                      ORDER BY id DESC
+                  ) G
+                  OUTER APPLY (
+                      SELECT TOP 1 * FROM dbFORM.dbo.mp_pengkajian_rawat_jalan_anak
+                      WHERE Regno COLLATE DATABASE_DEFAULT = A.Regno COLLATE DATABASE_DEFAULT
+                      ORDER BY id DESC
+                  ) G_ANAK
+                  OUTER APPLY (
+                      SELECT TOP 1 * FROM dbFORM.dbo.mp_pengkajian_rawat_jalan_gigi
+                      WHERE Regno COLLATE DATABASE_DEFAULT = A.Regno COLLATE DATABASE_DEFAULT
+                      ORDER BY id DESC
+                  ) G_GIGI
+                  OUTER APPLY (
+                      SELECT TOP 1 * FROM dbFORM.dbo.mp_pengkajian_rawat_jalan_maternitas
+                      WHERE Regno COLLATE DATABASE_DEFAULT = A.Regno COLLATE DATABASE_DEFAULT
+                      ORDER BY id DESC
+                  ) G_MAT
+                  OUTER APPLY (
+                      SELECT TOP 1 * FROM dbFORM.dbo.mp_triase_sekunder
+                      WHERE Regno COLLATE DATABASE_DEFAULT = A.Regno COLLATE DATABASE_DEFAULT
+                      ORDER BY id DESC
+                  ) G_TRI
                   WHERE {$where}
                   GROUP BY A.Regno
- 
+
                   UNION ALL
- 
+
                   SELECT
                       A.Regno,
                       MAX(A.Medrec) AS Medrec,
@@ -149,42 +228,80 @@ class Register extends Model
                       NULL AS Planning,
                       '25064002' AS SnomedCodeKeluhanUtama,
                       'Feeling unwell' AS SnomedDisplayKeluhanUtama,
-                      MAX(CASE 
-                          WHEN DATEDIFF(day, B.Bod, A.Regdate) <= 18 THEN NULL
-                          WHEN DATEDIFF(day, B.Bod, A.Regdate) <= (365 * 18) THEN CAST(AN.td AS VARCHAR(50)) + '/' + CAST(AN.td_diastol AS VARCHAR(50))
-                          ELSE CAST(DWS.tvit2 AS VARCHAR(50)) + '/' + CAST(DWS.tvit1_diastol AS VARCHAR(50))
-                      END) AS Sistole,
-                      NULL AS Diastole,
-                      MAX(CASE 
-                          WHEN DATEDIFF(day, B.Bod, A.Regdate) <= 18 THEN CAST(NEO.suhu AS VARCHAR(50))
-                          WHEN DATEDIFF(day, B.Bod, A.Regdate) <= (365 * 18) THEN CAST(AN.sh AS VARCHAR(50))
-                          ELSE CAST(DWS.tvit11 AS VARCHAR(50))
-                      END) AS Suhu,
-                      MAX(CASE 
-                          WHEN DATEDIFF(day, B.Bod, A.Regdate) <= 18 THEN CAST(NEO.respi AS VARCHAR(50))
-                          WHEN DATEDIFF(day, B.Bod, A.Regdate) <= (365 * 18) THEN CAST(AN.nfs AS VARCHAR(50))
-                          ELSE CAST(DWS.tvit8 AS VARCHAR(50))
-                      END) AS Pernapasan,
-                      MAX(CASE 
-                          WHEN DATEDIFF(day, B.Bod, A.Regdate) <= 18 THEN NULL
-                          WHEN DATEDIFF(day, B.Bod, A.Regdate) <= (365 * 18) THEN CAST(AN.spo2 AS VARCHAR(50))
-                          ELSE CAST(DWS.tvit14 AS VARCHAR(50))
-                      END) AS SpO2,
-                      MAX(CASE 
-                          WHEN DATEDIFF(day, B.Bod, A.Regdate) <= 18 THEN CAST(NEO.fdj AS VARCHAR(50))
-                          WHEN DATEDIFF(day, B.Bod, A.Regdate) <= (365 * 18) THEN CAST(AN.nd AS VARCHAR(50))
-                          ELSE CAST(DWS.tvit5 AS VARCHAR(50))
-                      END) AS Nadi,
+
+                      -- ── Vital Signs Rawat Inap (Medis + Catatan Keperawatan) ──
+                      MAX(COALESCE(
+                          CASE 
+                              WHEN DATEDIFF(day, B.Bod, A.Regdate) <= 18 THEN NULL
+                              WHEN DATEDIFF(day, B.Bod, A.Regdate) <= (365 * 18) THEN CAST(AN.td AS VARCHAR(50))
+                              ELSE CAST(DWS.tvit2 AS VARCHAR(50))
+                          END,
+                          CASE 
+                              WHEN CK_RANAP.tensi LIKE '%/%' THEN LEFT(CK_RANAP.tensi, CHARINDEX('/', CK_RANAP.tensi) - 1)
+                              ELSE NULLIF(CK_RANAP.tensi, '')
+                          END
+                      )) AS Sistole,
+
+                      MAX(COALESCE(
+                          CASE 
+                              WHEN DATEDIFF(day, B.Bod, A.Regdate) <= 18 THEN NULL
+                              WHEN DATEDIFF(day, B.Bod, A.Regdate) <= (365 * 18) THEN CAST(AN.td_diastol AS VARCHAR(50))
+                              ELSE CAST(DWS.tvit1_diastol AS VARCHAR(50))
+                          END,
+                          CASE 
+                              WHEN CK_RANAP.tensi LIKE '%/%' THEN SUBSTRING(CK_RANAP.tensi, CHARINDEX('/', CK_RANAP.tensi) + 1, 50)
+                              ELSE NULL
+                          END
+                      )) AS Diastole,
+
+                      MAX(COALESCE(
+                          CASE 
+                              WHEN DATEDIFF(day, B.Bod, A.Regdate) <= 18 THEN CAST(NEO.suhu AS VARCHAR(50))
+                              WHEN DATEDIFF(day, B.Bod, A.Regdate) <= (365 * 18) THEN CAST(AN.sh AS VARCHAR(50))
+                              ELSE CAST(DWS.tvit11 AS VARCHAR(50))
+                          END,
+                          NULLIF(CAST(CK_RANAP.suhu AS VARCHAR(50)), '')
+                      )) AS Suhu,
+
+                      MAX(COALESCE(
+                          CASE 
+                              WHEN DATEDIFF(day, B.Bod, A.Regdate) <= 18 THEN CAST(NEO.respi AS VARCHAR(50))
+                              WHEN DATEDIFF(day, B.Bod, A.Regdate) <= (365 * 18) THEN CAST(AN.nfs AS VARCHAR(50))
+                              ELSE CAST(DWS.tvit8 AS VARCHAR(50))
+                          END,
+                          NULLIF(CAST(CK_RANAP.pernapasan AS VARCHAR(50)), '')
+                      )) AS Pernapasan,
+
+                      MAX(COALESCE(
+                          CASE 
+                              WHEN DATEDIFF(day, B.Bod, A.Regdate) <= 18 THEN NULL
+                              WHEN DATEDIFF(day, B.Bod, A.Regdate) <= (365 * 18) THEN CAST(AN.spo2 AS VARCHAR(50))
+                              ELSE CAST(DWS.tvit14 AS VARCHAR(50))
+                          END,
+                          NULLIF(CAST(CK_RANAP.spo2 AS VARCHAR(50)), '')
+                      )) AS SpO2,
+
+                      MAX(COALESCE(
+                          CASE 
+                              WHEN DATEDIFF(day, B.Bod, A.Regdate) <= 18 THEN CAST(NEO.fdj AS VARCHAR(50))
+                              WHEN DATEDIFF(day, B.Bod, A.Regdate) <= (365 * 18) THEN CAST(AN.nd AS VARCHAR(50))
+                              ELSE CAST(DWS.tvit5 AS VARCHAR(50))
+                          END,
+                          NULLIF(CAST(CK_RANAP.nadi AS VARCHAR(50)), '')
+                      )) AS Nadi,
+
                       MAX(CASE 
                           WHEN DATEDIFF(day, B.Bod, A.Regdate) <= 18 THEN CAST(NEO.pb1 AS VARCHAR(50))
                           WHEN DATEDIFF(day, B.Bod, A.Regdate) <= (365 * 18) THEN CAST(AN.tbanak AS VARCHAR(50))
                           ELSE CAST(DWS.kg6 AS VARCHAR(50))
                       END) AS TinggiBadan,
+
                       MAX(CASE 
                           WHEN DATEDIFF(day, B.Bod, A.Regdate) <= 18 THEN CAST(NEO.bb AS VARCHAR(50))
                           WHEN DATEDIFF(day, B.Bod, A.Regdate) <= (365 * 18) THEN CAST(AN.bbanak AS VARCHAR(50))
                           ELSE CAST(DWS.kg4 AS VARCHAR(50))
                       END) AS BeratBadan,
+
                       NULL AS RiwayatAlergi,
                       NULL AS RiwayatAlergiOpsi,
                       NULL AS ReaksiAlergi,
@@ -224,6 +341,11 @@ class Register extends Model
                         AND Regno COLLATE DATABASE_DEFAULT = A.Regno COLLATE DATABASE_DEFAULT
                       ORDER BY id DESC
                   ) DWS
+                  OUTER APPLY (
+                      SELECT TOP 1 * FROM dbFORM.dbo.mp_catatan_keperawatan
+                      WHERE Regno COLLATE DATABASE_DEFAULT = A.Regno COLLATE DATABASE_DEFAULT
+                      ORDER BY id DESC
+                  ) CK_RANAP
                   LEFT JOIN FPulang H
                       ON H.Regno COLLATE DATABASE_DEFAULT = A.Regno COLLATE DATABASE_DEFAULT
                   WHERE {$where}
