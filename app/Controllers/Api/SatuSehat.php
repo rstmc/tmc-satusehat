@@ -827,17 +827,20 @@ class SatuSehat extends BaseController
         $medRequestUuids = []; // Map (NoResep_KodeObat) or KodeObat -> MedicationRequest UUID
         foreach ($obatsTemp as $index => $obat) {
             $kfaKey = trim($obat['KFA'] ?? '');
-            if (empty($kfaKey) || !is_numeric($kfaKey)) {
+            // if (empty($kfaKey) || !is_numeric($kfaKey)) {
+            //     continue; // Skip item tanpa KFA valid
+            // }
+            if (empty($kfaKey)) {
                 continue; // Skip item tanpa KFA valid
             }
             $obat['Urutan'] = $index + 1;
             $itemKode = trim($obat['KodeObat'] ?? '');
             $kodeDeduplikasi = !empty($itemKode) ? $itemKode : $kfaKey;
 
-            $medUuid = $medUuidsByKode[$itemKode] ?? ($medUuidsByKode[$kfaKey] ?? ($medUuidsByKode[$kodeDeduplikasi] ?? null));
-            if (!$medUuid) {
-                continue;
-            }
+            // $medUuid = $medUuidsByKode[$itemKode] ?? ($medUuidsByKode[$kfaKey] ?? ($medUuidsByKode[$kodeDeduplikasi] ?? null));
+            // if (!$medUuid) {
+            //     continue;
+            // }
 
             $reqUuid = 'urn:uuid:' . $this->generateUuid();
             
@@ -880,10 +883,10 @@ class SatuSehat extends BaseController
             $itemKode = trim($obat['KodeObat'] ?? '');
             $kodeDeduplikasi = !empty($itemKode) ? $itemKode : $kfaKey;
 
-            $medUuid = $medUuidsByKode[$itemKode] ?? ($medUuidsByKode[$kfaKey] ?? ($medUuidsByKode[$kodeDeduplikasi] ?? null));
-            if (!$medUuid) {
-                continue;
-            }
+            // $medUuid = $medUuidsByKode[$itemKode] ?? ($medUuidsByKode[$kfaKey] ?? ($medUuidsByKode[$kodeDeduplikasi] ?? null));
+            // if (!$medUuid) {
+            //     continue;
+            // }
 
             // Find matching MedicationRequest UUID
             $noResep = trim($obat['NoResep'] ?? ($obat['BLCode'] ?? ''));
