@@ -24,7 +24,8 @@ class RiwayatPerjalananPenyakit extends ClinicalImpressionBase
             "identifier" => [
                 [
                     "system" => "http://sys-ids.kemkes.go.id/clinicalimpression/" . $orgId,
-                    "value"  => $row['Regno'] . '-riwayat-penyakit',
+                    "use"    => "official",
+                    "value"  => $row['Regno'] . '-riwayat_perjalanan_penyakit',
                 ]
             ],
             "status" => "completed",

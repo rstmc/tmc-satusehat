@@ -18,7 +18,7 @@ class TujuanPerawatan extends GoalBase
                 [
                     "system" => "http://sys-ids.kemkes.go.id/goal/" . $orgId,
                     "use" => "official",
-                    "value" => $row['Regno'] . '-goal'
+                    "value" => $row['Regno'] . '-tujuan_perawatan'
                 ]
             ],
             "lifecycleStatus" => "planned",

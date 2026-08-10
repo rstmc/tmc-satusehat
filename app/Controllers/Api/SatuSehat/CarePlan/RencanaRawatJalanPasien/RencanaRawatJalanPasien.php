@@ -18,8 +18,17 @@ class RencanaRawatJalanPasien extends CarePlanBase
             $planning = 'Rencana rawat pasien';
         }
 
+        $orgId = env('SATUSEHAT_ORG_ID') ?: getenv('SATUSEHAT_ORG_ID') ?: ($_ENV['SATUSEHAT_ORG_ID'] ?? '');
+
         $payload = [
             "resourceType" => "CarePlan",
+            "identifier" => [
+                [
+                    "system" => "http://sys-ids.kemkes.go.id/careplan/" . $orgId,
+                    "use"    => "official",
+                    "value"  => ($row['Regno'] ?? '') . '-rencana_rawat_jalan_pasien'
+                ]
+            ],
             "status" => "active",
             "intent" => "plan",
             "category" => [

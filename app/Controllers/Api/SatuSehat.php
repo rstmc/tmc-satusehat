@@ -1207,13 +1207,18 @@ class SatuSehat extends BaseController
                             $autoValue  = $row['Regno'] . '-obs-' . $loincCode;
                             break;
                         case 'CarePlan':
-                            $cpCategory = $payload['category'][0]['coding'][0]['code'] ?? 'plan';
+                            // Suffix dengan subtype untuk membedakan antar CarePlan dalam 1 kunjungan
+                            $cpEntryKey = $entryKeys[array_search($entry, $entries, true)] ?? [];
+                            $cpSubtype  = $cpEntryKey['subtype'] ?? ($payload['category'][0]['coding'][0]['code'] ?? 'plan');
                             $autoSystem = 'http://sys-ids.kemkes.go.id/careplan/' . $orgId;
-                            $autoValue  = $row['Regno'] . '-careplan-' . $cpCategory;
+                            $autoValue  = $row['Regno'] . '-careplan-' . $cpSubtype;
                             break;
                         case 'ClinicalImpression':
+                            // Suffix dengan subtype agar RiwayatPerjalananPenyakit & ClinicalImpression tidak konflik
+                            $ciEntryKey = $entryKeys[array_search($entry, $entries, true)] ?? [];
+                            $ciSubtype  = $ciEntryKey['subtype'] ?? 'clinical-impression';
                             $autoSystem = 'http://sys-ids.kemkes.go.id/clinicalimpression/' . $orgId;
-                            $autoValue  = $row['Regno'] . '-clinicalimpression';
+                            $autoValue  = $row['Regno'] . '-' . $ciSubtype;
                             break;
                         case 'Procedure':
                             $procCode = $payload['code']['coding'][0]['code'] ?? 'proc';
@@ -1226,23 +1231,65 @@ class SatuSehat extends BaseController
                             $autoValue  = $row['Regno'] . '-sr-' . $srCode;
                             break;
                         case 'Goal':
+                            // Suffix dengan subtype untuk membedakan antar Goal dalam 1 kunjungan
+                            $goalEntryKey = $entryKeys[array_search($entry, $entries, true)] ?? [];
+                            $goalSubtype  = $goalEntryKey['subtype'] ?? 'goal';
                             $autoSystem = 'http://sys-ids.kemkes.go.id/goal/' . $orgId;
-                            $autoValue  = $row['Regno'] . '-goal';
+                            $autoValue  = $row['Regno'] . '-' . $goalSubtype;
+                            break;
+                        case 'QuestionnaireResponse':
+                            // QuestionnaireResponse hanya 1 per kunjungan
+                            $autoSystem = 'http://sys-ids.kemkes.go.id/questionnaire-response/' . $orgId;
+                            $autoValue  = $row['Regno'] . '-qr';
                             break;
                         case 'MedicationRequest':
-                            $medRef = str_replace('Medication/', '', $payload['medicationReference']['reference'] ?? 'med');
-                            $autoSystem = 'http://sys-ids.kemkes.go.id/prescription/' . $orgId;
-                            $autoValue  = $row['Regno'] . '-medreq-' . $medRef;
+                            // Gunakan identifier prescription-item dari payload jika ada (lebih deterministik)
+                            $mrIdentifiers = $payload['identifier'] ?? [];
+                            $mrItemId = null;
+                            foreach ($mrIdentifiers as $mrId) {
+                                if (!empty($mrId['system']) && strpos($mrId['system'], 'prescription-item') !== false) {
+                                    $mrItemId = $mrId['system'] . '|' . $mrId['value'];
+                                    break;
+                                }
+                            }
+                            if ($mrItemId) {
+                                // Sudah punya identifier dari payload — tidak perlu auto-inject
+                                break;
+                            }
+                            // Fallback: gunakan urutan dari KodeObat bukan UUID medicationReference
+                            $mrUrutan = $payload['identifier'][0]['value'] ?? ($row['KodeObat'] ?? 'x');
+                            $autoSystem = 'http://sys-ids.kemkes.go.id/prescription-item/' . $orgId;
+                            $autoValue  = $row['Regno'] . '-medreq-' . $mrUrutan;
                             break;
                         case 'MedicationDispense':
-                            $medRef = str_replace('Medication/', '', $payload['medicationReference']['reference'] ?? 'med');
-                            $autoSystem = 'http://sys-ids.kemkes.go.id/medicationdispense/' . $orgId;
-                            $autoValue  = $row['Regno'] . '-meddisp-' . $medRef;
+                            // Gunakan identifier prescription-item dari payload jika ada (lebih deterministik)
+                            $mdIdentifiers = $payload['identifier'] ?? [];
+                            $mdItemId = null;
+                            foreach ($mdIdentifiers as $mdId) {
+                                if (!empty($mdId['system']) && strpos($mdId['system'], 'prescription-item') !== false) {
+                                    $mdItemId = $mdId['system'] . '|' . $mdId['value'];
+                                    break;
+                                }
+                            }
+                            if ($mdItemId) {
+                                // Sudah punya identifier dari payload — tidak perlu auto-inject
+                                break;
+                            }
+                            // Fallback: gunakan urutan dari KodeObat bukan UUID medicationReference
+                            $mdUrutan = $payload['identifier'][0]['value'] ?? ($row['KodeObat'] ?? 'x');
+                            $autoSystem = 'http://sys-ids.kemkes.go.id/prescription-item/' . $orgId;
+                            $autoValue  = $row['Regno'] . '-meddisp-' . $mdUrutan;
                             break;
                         case 'MedicationStatement':
-                            $medRef = str_replace('Medication/', '', $payload['medicationReference']['reference'] ?? 'med');
+                            // MedicationStatement sudah punya identifier dari payload — tidak perlu auto-inject
+                            // Tapi sebagai fallback, gunakan identifier dari payload jika ada
+                            $msIdentifiers = $payload['identifier'] ?? [];
+                            if (!empty($msIdentifiers)) {
+                                break; // Sudah ada identifier, skip auto-inject
+                            }
+                            $msKfa = $payload['medicationCodeableConcept']['coding'][0]['code'] ?? ($row['KodeObat'] ?? 'x');
                             $autoSystem = 'http://sys-ids.kemkes.go.id/medicationstatement/' . $orgId;
-                            $autoValue  = $row['Regno'] . '-medstmt-' . $medRef;
+                            $autoValue  = $row['Regno'] . '-medstmt-' . $msKfa;
                             break;
                         case 'Immunization':
                             $immCode = $payload['vaccineCode']['coding'][0]['code'] ?? 'imm';
@@ -1260,8 +1307,11 @@ class SatuSehat extends BaseController
                             $autoValue  = $row['Regno'] . '-diagreport-' . $diagCode;
                             break;
                         case 'Composition':
+                            // Suffix dengan subtype untuk membedakan antar Composition dalam 1 kunjungan
+                            $cmpEntryKey = $entryKeys[array_search($entry, $entries, true)] ?? [];
+                            $cmpSubtype  = $cmpEntryKey['subtype'] ?? 'composition';
                             $autoSystem = 'http://sys-ids.kemkes.go.id/composition/' . $orgId;
-                            $autoValue  = $row['Regno'] . '-composition';
+                            $autoValue  = $row['Regno'] . '-' . $cmpSubtype;
                             break;
                     }
 

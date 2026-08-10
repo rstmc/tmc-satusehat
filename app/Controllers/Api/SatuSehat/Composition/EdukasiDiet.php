@@ -16,7 +16,9 @@ class EdukasiDiet extends CompositionBase
 
         $compositionDate = date('c', strtotime("$regDate $regTime"));
 
-        $identifierValue = $row['NoRawat'] ?? 'DOC-' . date('YmdHis');
+        // Identifier stabil per regno agar ifNoneExist bisa deteksi duplikat (mencegah 412)
+        // Fallback ke regno-edukasi_diet jika NoRawat tidak tersedia, bukan timestamp acak
+        $identifierValue = !empty($row['NoRawat']) ? $row['NoRawat'] : (($row['Regno'] ?? '') . '-edukasi_diet');
 
         $edukasiDietText = 'Tidak butuh diet';
         if (!empty($row['TinggiBadan']) && !empty($row['BeratBadan'])) {
