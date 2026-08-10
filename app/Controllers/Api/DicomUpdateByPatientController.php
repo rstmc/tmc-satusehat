@@ -28,6 +28,13 @@ class DicomUpdateByPatientController extends ResourceController
         $oldPatientId = trim($input['oldPatientId']);
         $newPatientId = trim($input['newPatientId']);
 
+        if ($oldPatientId === $newPatientId) {
+          return $this->respond([
+           'status'  => 'no_changes',
+           'message' => 'oldPatientId sama dengan newPatientId, proses dibatalkan untuk menghindari penghapusan data'
+          ]);
+       }
+
         if (empty($oldPatientId) || empty($newPatientId)) {
             return $this->fail('PatientID tidak boleh kosong/hanya spasi');
         }
