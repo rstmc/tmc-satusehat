@@ -1118,11 +1118,22 @@ class SatuSehat extends BaseController
         }
 
         // 13. QuestionnaireResponse
+        // CATATAN: SatuSehat menolak custom identifier system untuk QuestionnaireResponse (RuleNumber 11127),
+        // sehingga ifNoneExist tidak bisa dipakai. Cek log lokal untuk mencegah duplikasi.
         $qrController = new QuestionnaireResponse($this->service);
         if (method_exists($qrController, 'buildPayload')) {
-            $qrPayload = $qrController->buildPayload($row, $encounterId);
-            if ($qrPayload) {
-                $addEntry($qrPayload, ['type' => 'QuestionnaireResponse', 'subtype' => 'questionnaire_response']);
+            // Cek apakah QR sudah pernah berhasil dikirim untuk regno ini
+            $qrLogModel = new SatuSehatLogModel();
+            $qrAlreadySent = $qrLogModel
+                ->where('Regno', $row['Regno'])
+                ->where('resourceType', 'QuestionnaireResponse')
+                ->countAllResults() > 0;
+
+            if (!$qrAlreadySent) {
+                $qrPayload = $qrController->buildPayload($row, $encounterId);
+                if ($qrPayload) {
+                    $addEntry($qrPayload, ['type' => 'QuestionnaireResponse', 'subtype' => 'questionnaire_response']);
+                }
             }
         }
 
@@ -1238,9 +1249,8 @@ class SatuSehat extends BaseController
                             $autoValue  = $row['Regno'] . '-' . $goalSubtype;
                             break;
                         case 'QuestionnaireResponse':
-                            // QuestionnaireResponse hanya 1 per kunjungan
-                            $autoSystem = 'http://sys-ids.kemkes.go.id/questionnaire-response/' . $orgId;
-                            $autoValue  = $row['Regno'] . '-qr';
+                            // SatuSehat TIDAK mengizinkan custom identifier system untuk QuestionnaireResponse
+                            // (RuleNumber 11127: Invalid identifier system). Skip auto-inject.
                             break;
                         case 'MedicationRequest':
                             // Gunakan identifier prescription-item dari payload jika ada (lebih deterministik)

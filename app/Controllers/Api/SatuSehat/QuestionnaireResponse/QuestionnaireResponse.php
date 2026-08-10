@@ -45,15 +45,8 @@ class QuestionnaireResponse extends QuestionnaireResponseBase
 
         $orgId = getenv('SATUSEHAT_ORG_ID');
 
-        // Identifier stabil per regno agar ifNoneExist bisa deteksi duplikat dan mencegah 412
-        $identifierValue = ($row['Regno'] ?? '') . '-qr';
-
         $payload = [
             "resourceType" => "QuestionnaireResponse",
-            "identifier" => [
-                "system" => "http://sys-ids.kemkes.go.id/questionnaire-response/" . $orgId,
-                "value"  => $identifierValue
-            ],
             "questionnaire" => "https://fhir.kemkes.go.id/Questionnaire/Q0002",
             "status" => "completed",
 
