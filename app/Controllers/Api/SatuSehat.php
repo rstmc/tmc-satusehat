@@ -842,7 +842,7 @@ class SatuSehat extends BaseController
             $reqUuid = 'urn:uuid:' . $this->generateUuid();
             
             // Map the MedicationRequest UUID
-            $noResep = trim($obat['NoResep'] ?? '');
+            $noResep = trim($obat['NoResep'] ?? ($obat['BLCode'] ?? ''));
             $mapKey = $noResep . '_' . $itemKode;
             $medRequestUuids[$mapKey] = $reqUuid;
             if ($itemKode && !isset($medRequestUuids[$itemKode])) {
@@ -850,6 +850,7 @@ class SatuSehat extends BaseController
             }
 
             $reqData = array_merge($row, $obat);
+            $reqData['NoResep'] = $noResep;
             $reqData['MedicationId'] = $medUuid;
             $reqData['TglResep'] = $obat['TglResep'] ?? ($obat['RegDate'] ?? ($obat['Regdate'] ?? null));
             $reqData['AturanPakai'] = $obat['AturanPakai'] ?? null;
@@ -885,7 +886,7 @@ class SatuSehat extends BaseController
             }
 
             // Find matching MedicationRequest UUID
-            $noResep = trim($obat['NoResep'] ?? '');
+            $noResep = trim($obat['NoResep'] ?? ($obat['BLCode'] ?? ''));
             $mapKey = $noResep . '_' . $itemKode;
             $reqUuid = $medRequestUuids[$mapKey] ?? ($medRequestUuids[$itemKode] ?? null);
 
@@ -916,6 +917,7 @@ class SatuSehat extends BaseController
             }
 
             $dispenseData = array_merge($row, $obat);
+            $dispenseData['NoResep'] = $noResep;
             $dispenseData['MedicationId'] = $medUuid;
 
             if (method_exists($medicationDispenseController, 'buildPayload')) {

@@ -10,7 +10,7 @@ class MedicationDispense extends MedicationDispenseBase
         $orgId = env('SATUSEHAT_ORG_ID') ?: getenv('SATUSEHAT_ORG_ID') ?: ($_ENV['SATUSEHAT_ORG_ID'] ?? '');
 
         // Identifier: gunakan NoResep jika ada, fallback ke regno-urutan
-        $identifierValue = !empty($row['NoResep']) ? $row['NoResep'] : ($row['Regno'] ?? 'UNKNOWN');
+        $identifierValue = !empty($row['NoResep']) ? $row['NoResep'] : (!empty($row['BLCode']) ? $row['BLCode'] : ($row['Regno'] ?? 'UNKNOWN'));
         $urutan = $row['Urutan'] ?? $row['KodeObat'] ?? '1';
         if (strpos($urutan, '-') !== false) {
             $parts = explode('-', $urutan);
