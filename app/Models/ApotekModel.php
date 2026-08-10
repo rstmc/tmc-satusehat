@@ -15,11 +15,11 @@ class ApotekModel extends Model
         return $this->db->table('HeadApotikTmp')
             ->select('
                 HeadApotikTmp.Id AS HeadId,
+                HeadApotikTmp.Id AS NoResep,
                 HeadApotikTmp.Regno,
                 HeadApotikTmp.RegDate,
                 HeadApotikTmp.MedRec,
                 HeadApotikTmp.KdDoc,
-                HeadApotikTmp.NoResep,
                 DetailApotikTmp.Id AS DetailId,
                 DetailApotikTmp.KodeObat,
                 DetailApotikTmp.NamaObat,
