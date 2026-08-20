@@ -737,14 +737,14 @@ class SatuSehat extends BaseController
 
         // Filter out skipped KFAs (invalid/unmapped KFA codes detected on previous attempts)
         if (!empty($skippedKfas)) {
-            $obatsTemp = array_filter($obatsTemp, function($item) use ($skippedKfas) {
+            $obatsTemp = array_values(array_filter($obatsTemp, function($item) use ($skippedKfas) {
                 $kfa = trim($item['KFA'] ?? '');
                 return !in_array($kfa, $skippedKfas);
-            });
-            $obatsDispense = array_filter($obatsDispense, function($item) use ($skippedKfas) {
+            }));
+            $obatsDispense = array_values(array_filter($obatsDispense, function($item) use ($skippedKfas) {
                 $kfa = trim($item['KFA'] ?? '');
                 return !in_array($kfa, $skippedKfas);
-            });
+            }));
         }
 
         $obats = !empty($obatsTemp) ? $obatsTemp : $obatsDispense;
@@ -857,7 +857,7 @@ class SatuSehat extends BaseController
             if (method_exists($medicationRequestController, 'buildPayload')) {
                 $reqPayload = $medicationRequestController->buildPayload($reqData, $encounterId);
                 if ($reqPayload) {
-                    $mrSubtype = 'medreq_' . ($noResep ?: 'no') . '_' . $itemKode;
+                    $mrSubtype = 'medreq_' . ($noResep ?: 'no') . '_' . $itemKode . '_' . ($index + 1);
                     $addEntry($reqPayload, ['type' => 'MedicationRequest', 'subtype' => $mrSubtype, 'local_id' => $itemKode], 'POST', 'MedicationRequest', true, $reqUuid);
                 }
             }
@@ -876,8 +876,10 @@ class SatuSehat extends BaseController
             }
 
             $itemKode = trim($obat['KodeObat'] ?? '');
-            // Find matching MedicationRequest UUID
             $noResep = trim($obat['NoResep'] ?? ($obat['BLCode'] ?? ''));
+            $dispenseUrutan = (string)($obat['Urutan'] ?? ($index + 1));
+
+            // Find matching MedicationRequest UUID
             $mapKey = $noResep . '_' . $itemKode;
             $reqUuid = $medRequestUuids[$mapKey] ?? ($medRequestUuids[$itemKode] ?? null);
 
@@ -887,6 +889,7 @@ class SatuSehat extends BaseController
                 $medRequestUuids[$mapKey] = $reqUuid;
 
                 $reqData = array_merge($row, $obat);
+                $reqData['Urutan'] = $dispenseUrutan;
                 $reqData['MedicationId'] = $medUuid;
                 $reqData['TglResep'] = $obat['TglResep'] ?? ($obat['RegDate'] ?? ($obat['Regdate'] ?? null));
                 $reqData['AturanPakai'] = $obat['AturanPakai'] ?? null;
@@ -901,20 +904,21 @@ class SatuSehat extends BaseController
                 if (method_exists($medicationRequestController, 'buildPayload')) {
                     $reqPayload = $medicationRequestController->buildPayload($reqData, $encounterId);
                     if ($reqPayload) {
-                        $mrSubtype = 'medreq_' . ($noResep ?: 'no') . '_' . $itemKode;
+                        $mrSubtype = 'medreq_' . ($noResep ?: 'no') . '_' . $itemKode . '_' . $dispenseUrutan;
                         $addEntry($reqPayload, ['type' => 'MedicationRequest', 'subtype' => $mrSubtype, 'local_id' => $itemKode], 'POST', 'MedicationRequest', true, $reqUuid);
                     }
                 }
             }
 
             $dispenseData = array_merge($row, $obat);
+            $dispenseData['Urutan'] = $dispenseUrutan;
             $dispenseData['NoResep'] = $noResep;
             $dispenseData['MedicationId'] = $medUuid;
 
             if (method_exists($medicationDispenseController, 'buildPayload')) {
                 $dispensePayload = $medicationDispenseController->buildPayload($dispenseData, $encounterId, $reqUuid);
                 if ($dispensePayload) {
-                    $mdSubtype = 'meddisp_' . ($noResep ?: 'no') . '_' . $itemKode;
+                    $mdSubtype = 'meddisp_' . ($noResep ?: 'no') . '_' . $itemKode . '_' . $dispenseUrutan;
                     $addEntry($dispensePayload, ['type' => 'MedicationDispense', 'subtype' => $mdSubtype, 'local_id' => $itemKode]);
                 }
             }
@@ -1143,24 +1147,30 @@ class SatuSehat extends BaseController
             }
         }
 
-        // 14. MedicationStatement
-        // Gunakan obatsDispense jika ada (lebih akurat = sudah diserahkan ke pasien),
-        // fallback ke obatsTemp (resep dari dokter)
-        $msObats = !empty($obatsDispense) ? $obatsDispense : $obatsTemp;
-        $msController = new MedicationStatement($this->service);
-        foreach ($msObats as $msIndex => $item) {
-            if (empty($item['KFA'])) {
-                continue;
-            }
+        // 14. MedicationStatement (Riwayat Penggunaan Obat dari Kunjungan Sebelumnya)
+        $medrec = $row['Medrec'] ?? ($row['MedRec'] ?? '');
+        $regDate = $row['RegDate'] ?? ($row['Regdate'] ?? null);
+        $riwayatObats = $apotekModel->getRiwayatObatByMedrec($medrec, $row['Regno'], $regDate);
 
-            $msData = array_merge($row, $item);
-            // Urutan wajib di-set agar identifier setiap MedicationStatement unik (mencegah RuleNumber 20002)
-            $msData['Urutan'] = $msIndex + 1;
+        if (!empty($riwayatObats)) {
+            $msController = new MedicationStatement($this->service);
+            foreach ($riwayatObats as $msIndex => $item) {
+                $itemKfa = trim($item['KFA'] ?? '');
+                if (empty($itemKfa) || (!empty($skippedKfas) && in_array($itemKfa, $skippedKfas))) {
+                    continue;
+                }
 
-            if (method_exists($msController, 'buildPayload')) {
-                $msPayload = $msController->buildPayload($msData, $encounterId);
-                if ($msPayload) {
-                    $addEntry($msPayload, ['type' => 'MedicationStatement', 'subtype' => $item['KodeObat'] ?? 'medication_statement']);
+                $msData = array_merge($row, $item);
+                // Gunakan tanggal kunjungan/resep sebelumnya sebagai acuan waktu assertion
+                $msData['TglResep'] = $item['TglResep'] ?? ($item['RegDate'] ?? $regDate);
+                // Urutan wajib di-set agar identifier setiap MedicationStatement unik (mencegah RuleNumber 20002)
+                $msData['Urutan'] = $msIndex + 1;
+
+                if (method_exists($msController, 'buildPayload')) {
+                    $msPayload = $msController->buildPayload($msData, $encounterId);
+                    if ($msPayload) {
+                        $addEntry($msPayload, ['type' => 'MedicationStatement', 'subtype' => ($item['KodeObat'] ?? 'medstmt') . '_' . ($msIndex + 1)]);
+                    }
                 }
             }
         }
@@ -1448,11 +1458,13 @@ class SatuSehat extends BaseController
         } catch (\Exception $e) {
             $msg = $e->getMessage();
 
-            // Intercept 412 Precondition Failed / "search criteria are not selective enough" (Duplikasi data >1 di Kemkes)
+            // Intercept 412 Precondition Failed / "search criteria are not selective enough" / Rule 20002 Found duplicate
             if (
                 stripos($msg, '412') !== false 
                 || stripos($msg, 'not selective') !== false 
                 || stripos($msg, 'selective enough') !== false
+                || stripos($msg, '20002') !== false
+                || stripos($msg, 'Found duplicate') !== false
             ) {
                 // Cari resource type dan parameter identifier dari bundle payload yang dikirim
                 $cleanedUp = false;
@@ -1566,12 +1578,17 @@ class SatuSehat extends BaseController
                 }
             }
 
-            // Automatic KFA bypass: Catch "Code not found: '93026025'" / "Code not found: '...'" (Rule 10433 / 10024)
-            if (preg_match('/Code not found:\s*\'([0-9]+)\'/i', $msg, $matches) || preg_match('/Code not found:\s*\'([^\']+)\'\s*in system/i', $msg, $matches)) {
-                $invalidKfa = trim($matches[1]);
+            // Automatic KFA bypass: Catch Rule 10433 / 10024 ("Code not found: '93026025'")
+            if (
+                preg_match('/Code not found:\s*[\'"]?([0-9]+)[\'"]?/i', $msg, $matches) ||
+                preg_match('/Code not found:\s*[\'"]?([^\'"\s]+)[\'"]?\s*in system/i', $msg, $matches) ||
+                (stripos($msg, '10433') !== false && preg_match('/[\'"]([0-9]+)[\'"]/', $msg, $matches)) ||
+                (stripos($msg, '10024') !== false && preg_match('/[\'"]([0-9]+)[\'"]/', $msg, $matches))
+            ) {
+                $invalidKfa = trim($matches[1] ?? '');
                 if (!empty($invalidKfa) && !in_array($invalidKfa, $skippedKfas)) {
                     $skippedKfas[] = $invalidKfa;
-                    log_message('warning', "KFA {$invalidKfa} not found on Kemkes. Retrying bundle without it for Regno " . ($row['Regno'] ?? ''));
+                    log_message('warning', "KFA {$invalidKfa} not found on Kemkes (Rule 10433/10024). Retrying bundle without it for Regno " . ($row['Regno'] ?? ''));
                     return $this->processRegnoBundle($row, $skippedKfas, $retryCount + 1);
                 }
             }
