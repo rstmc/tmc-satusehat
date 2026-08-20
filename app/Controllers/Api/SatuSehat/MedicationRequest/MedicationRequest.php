@@ -98,7 +98,7 @@ class MedicationRequest extends MedicationRequestBase
         $kdTuju      = strtoupper(trim($row['KdTuju'] ?? 'RJ'));
         $kdPoli      = trim($row['KdPoli'] ?? '');
         $isIGD       = ($kdPoli === '30');
-        $isRawatInap = ($kdTuju !== 'RJ');
+        $isRawatInap = !in_array($kdTuju, ['RJ', '2']);
 
         if (!$isIGD && !$isRawatInap) {
             $requestCategory     = 'outpatient';

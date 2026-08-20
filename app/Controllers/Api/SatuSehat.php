@@ -235,7 +235,7 @@ class SatuSehat extends BaseController
         }
 
         $isEmer = ($kdPoli === '30');
-        $isRanap = (strtoupper($row['KdTuju'] ?? '') === 'RI');
+        $isRanap = (strtoupper($row['KdTuju'] ?? '') === 'RI' || strtoupper($row['KdTuju'] ?? '') === '1');
 
         $classCode = 'AMB';
         $classDisplay = 'ambulatory';

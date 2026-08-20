@@ -155,7 +155,7 @@ class Register extends Model
                   INNER JOIN MasterPS B
                       ON B.MedRec COLLATE DATABASE_DEFAULT
                          = A.Medrec COLLATE DATABASE_DEFAULT
-                         AND A.KdTuju = 'RJ'
+                         AND A.KdTuju IN ('RJ', '2')
                   INNER JOIN FtDokter C
                       ON C.KdDoc COLLATE DATABASE_DEFAULT
                          = A.KdDoc COLLATE DATABASE_DEFAULT
