@@ -219,17 +219,17 @@ class SatuSehat extends BaseController
             '52' => ['code' => '702873001', 'display' => 'Health check service'],
             '53' => ['code' => '722162002', 'display' => 'Psychology service'],
             '54' => ['code' => '185389009', 'display' => 'Home visit service'],
-            '55' => ['code' => '408474000', 'display' => 'Adult hematology service'],
-            '56' => ['code' => '408474000', 'display' => 'Pediatric hematology service'],
+            '55' => ['code' => '419192003', 'display' => 'Internal medicine'],
+            '56' => ['code' => '419192003', 'display' => 'Internal medicine'],
             '57' => ['code' => '308335008', 'display' => 'Hospital admission service'],
-            '58' => ['code' => '408474000', 'display' => 'Hematology and oncology service'],
+            '58' => ['code' => '419192003', 'display' => 'Internal medicine'],
         ];
 
         $kdPoli = $row['KdPoli'] ?? '';
         $stCode = $serviceTypeMap[$kdPoli]['code'] ?? '419192003';
         $stDisplay = $serviceTypeMap[$kdPoli]['display'] ?? 'Internal medicine';
 
-        if (in_array($stCode, ['408457005', '408478007', '408469000', '408476003'])) {
+        if (in_array($stCode, ['408457005', '408478007', '408469000', '408476003', '408474000'])) {
             $stCode = '419192003';
             $stDisplay = 'Internal medicine';
         }
@@ -709,18 +709,6 @@ class SatuSehat extends BaseController
         $obatsTemp = $apotekModel->getObatByRegno($row['Regno']);
         $obatsDispense = $apotekModel->getDispenseObatByRegno($row['Regno']);
 
-        // Filter out skipped KFAs (invalid/unmapped KFA codes detected on previous attempts)
-        if (!empty($skippedKfas)) {
-            $obatsTemp = array_filter($obatsTemp, function($item) use ($skippedKfas) {
-                $kfa = trim($item['KFA'] ?? '');
-                return !in_array($kfa, $skippedKfas);
-            });
-            $obatsDispense = array_filter($obatsDispense, function($item) use ($skippedKfas) {
-                $kfa = trim($item['KFA'] ?? '');
-                return !in_array($kfa, $skippedKfas);
-            });
-        }
-
         // Trim KFA, NoResep, and KodeObat to prevent spacing/matching errors
         foreach ($obatsTemp as &$item) {
             if (isset($item['KFA'])) {
@@ -746,6 +734,18 @@ class SatuSehat extends BaseController
             }
         }
         unset($item);
+
+        // Filter out skipped KFAs (invalid/unmapped KFA codes detected on previous attempts)
+        if (!empty($skippedKfas)) {
+            $obatsTemp = array_filter($obatsTemp, function($item) use ($skippedKfas) {
+                $kfa = trim($item['KFA'] ?? '');
+                return !in_array($kfa, $skippedKfas);
+            });
+            $obatsDispense = array_filter($obatsDispense, function($item) use ($skippedKfas) {
+                $kfa = trim($item['KFA'] ?? '');
+                return !in_array($kfa, $skippedKfas);
+            });
+        }
 
         $obats = !empty($obatsTemp) ? $obatsTemp : $obatsDispense;
 
@@ -1566,11 +1566,12 @@ class SatuSehat extends BaseController
                 }
             }
 
-            // Automatic KFA bypass: Catch "Code not found: '93026854' in system" and retry bundle without it
-            if (preg_match('/Code not found:\s*\'([^\']+)\'\s*in system/i', $msg, $matches)) {
+            // Automatic KFA bypass: Catch "Code not found: '93026025'" / "Code not found: '...'" (Rule 10433 / 10024)
+            if (preg_match('/Code not found:\s*\'([0-9]+)\'/i', $msg, $matches) || preg_match('/Code not found:\s*\'([^\']+)\'\s*in system/i', $msg, $matches)) {
                 $invalidKfa = trim($matches[1]);
                 if (!empty($invalidKfa) && !in_array($invalidKfa, $skippedKfas)) {
                     $skippedKfas[] = $invalidKfa;
+                    log_message('warning', "KFA {$invalidKfa} not found on Kemkes. Retrying bundle without it for Regno " . ($row['Regno'] ?? ''));
                     return $this->processRegnoBundle($row, $skippedKfas, $retryCount + 1);
                 }
             }

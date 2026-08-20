@@ -48,14 +48,25 @@ class MedicationDispense extends MedicationDispenseBase
         $handedOverTime = date('c', $ts);
 
         $medRef = $row['MedicationId'] ?? '';
-        if (strpos($medRef, 'urn:uuid:') !== 0) {
-            $medRef = "Medication/" . $medRef;
+        if (!empty($medRef)) {
+            if (strpos($medRef, 'urn:uuid:') === 0 || strpos($medRef, 'Medication/') === 0) {
+                // already has prefix
+            } else {
+                $medRef = "Medication/" . $medRef;
+            }
         }
 
         $reqRef = $medRequestId ?? $row['MedicationRequestId'] ?? '';
         if (!empty($reqRef)) {
-            if (strpos($reqRef, 'urn:uuid:') !== 0) {
+            if (strpos($reqRef, 'urn:uuid:') === 0) {
+                // valid bundle internal urn:uuid
+            } elseif (preg_match('/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/', $reqRef)) {
                 $reqRef = "MedicationRequest/" . $reqRef;
+            } elseif (strpos($reqRef, 'MedicationRequest/') === 0 && preg_match('/^MedicationRequest\/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/', $reqRef)) {
+                // valid MedicationRequest/{uuid}
+            } else {
+                // invalid format, omit authorizingPrescription to prevent Rule 10393
+                $reqRef = '';
             }
         } else {
             $reqRef = '';

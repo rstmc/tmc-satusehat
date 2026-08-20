@@ -44,7 +44,7 @@ class MedicationRequest extends MedicationRequestBase
         $authoredOn = date('c', $authTs);
 
         $medRef = $row['MedicationId'] ?? '8f299a19-5887-4b8e-90a2-c2c15ecbe1d1';
-        if (strpos($medRef, 'urn:uuid:') !== 0) {
+        if (strpos($medRef, 'urn:uuid:') !== 0 && strpos($medRef, 'Medication/') !== 0) {
             $medRef = "Medication/" . $medRef;
         }
 
