@@ -21,12 +21,12 @@ class MedicationStatement extends MedicationStatementBase
         }
 
         $orgId = env('SATUSEHAT_ORG_ID') ?: getenv('SATUSEHAT_ORG_ID') ?: ($_ENV['SATUSEHAT_ORG_ID'] ?? '');
-        $urutan = $row['Urutan'] ?? $row['KodeObat'] ?? '1';
+        $urutan = (string)($row['Urutan'] ?? $row['KodeObat'] ?? '1');
         if (strpos($urutan, '-') !== false) {
             $parts = explode('-', $urutan);
             $urutan = $parts[0];
         }
-        $identifierValue = ($row['Regno'] ?? ($row['NoResep'] ?? '')) . '-' . $urutan . '-medication-statement';
+        $identifierValue = (string)(($row['Regno'] ?? ($row['NoResep'] ?? '')) . '-' . $urutan . '-medication-statement');
 
         $dateInput = $row['TglResep'] ?? $row['RegDate'] ?? $row['Regdate'] ?? null;
         $timeInput = $row['RegTime'] ?? $row['Jam'] ?? '00:00:00';

@@ -585,28 +585,17 @@ class SatuSehat extends BaseController
             $addEntry($diagnosis->buildPayload($row, $encounterId), ['type' => 'Condition', 'subtype' => 'diagnosis']);
 
         $keluhanUtamaPayload = null;
+        $keluhanUtamaUuid = null;
         if (method_exists($keluhanUtama, 'buildPayload')) {
             $keluhanUtamaPayload = $keluhanUtama->buildPayload($row, $encounterId);
-            $addEntry($keluhanUtamaPayload, ['type' => 'Condition', 'subtype' => 'keluhan_utama']);
+            if ($keluhanUtamaPayload) {
+                $keluhanUtamaUuid = 'urn:uuid:' . $this->generateUuid();
+                $addEntry($keluhanUtamaPayload, ['type' => 'Condition', 'subtype' => 'keluhan_utama'], 'POST', 'Condition', true, $keluhanUtamaUuid);
+            }
         }
 
         if (method_exists($meninggalkanFaskes, 'buildPayload'))
             $addEntry($meninggalkanFaskes->buildPayload($row, $encounterId), ['type' => 'Condition', 'subtype' => 'meninggalkan_faskes']);
-
-        // Keluhan Utama ID for other resources
-        // Since we are bundling, we don't have the ID yet.
-        // We must use a UUID if we want to reference it in ClinicalImpression/Goal.
-        // But ClinicalImpression logic in processRowClinicalImpression uses $keluhanUtamaId from PREVIOUS response.
-        // If we bundle, we must use UUID reference.
-        // Let's generate a UUID for Keluhan Utama if it exists.
-        $keluhanUtamaUuid = null;
-        if ($keluhanUtamaPayload) {
-            $keluhanUtamaUuid = 'urn:uuid:' . $this->generateUuid();
-            // Find the entry we just added and set fullUrl
-            $lastIdx = count($entries) - 1;
-            $entries[$lastIdx]['fullUrl'] = $keluhanUtamaUuid;
-            // Also need to pass this UUID to dependents
-        }
 
         // 3. Observations
         $obsClasses = [
@@ -760,7 +749,7 @@ class SatuSehat extends BaseController
 
         $obats = !empty($obatsTemp) ? $obatsTemp : $obatsDispense;
 
-        $medicationController = new Medication($this->service);
+        // $medicationController = new Medication($this->service);
         $medicationRequestController = new MedicationRequest($this->service);
         $medicationDispenseController = new MedicationDispense($this->service);
 
@@ -1377,6 +1366,8 @@ class SatuSehat extends BaseController
             }
         }
         unset($entry);
+
+        $entries = array_values($entries);
 
         $bundlePayload = [
             "resourceType" => "Bundle",
