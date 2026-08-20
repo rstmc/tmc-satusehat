@@ -192,14 +192,14 @@ class SatuSehat extends BaseController
             '13' => ['code' => '408468001', 'display' => 'Neurosurgical service'],
             '14' => ['code' => '408471009', 'display' => 'Orthopedic service'],
             '15' => ['code' => '408460008', 'display' => 'Psychiatry service'],
-            '16' => ['code' => '722163007', 'display' => 'Pediatric dental service'],
+            '16' => ['code' => '408444009', 'display' => 'Dental service'],
             '17' => ['code' => '408444009', 'display' => 'Dental service'],
-            '18' => ['code' => '408450007', 'display' => 'Laboratory medicine service'],
+            '18' => ['code' => '419192003', 'display' => 'Internal medicine'],
             '20' => ['code' => '408466002', 'display' => 'Anesthesiology service'],
-            '21' => ['code' => '408455002', 'display' => 'Radiology service'],
-            '30' => ['code' => '408478007', 'display' => 'Emergency medical service'],
+            '21' => ['code' => '419192003', 'display' => 'Internal medicine'],
+            '30' => ['code' => '419192003', 'display' => 'Internal medicine'],
             '31' => ['code' => '419192003', 'display' => 'Internal medicine'],
-            '32' => ['code' => '722164001', 'display' => 'Vascular surgery service'],
+            '32' => ['code' => '394609007', 'display' => 'Surgical service'],
             '33' => ['code' => '408465003', 'display' => 'Oral and maxillofacial surgery service'],
             '35' => ['code' => '419192003', 'display' => 'Internal medicine'],
             '36' => ['code' => '394579002', 'display' => 'Cardiology service'],
@@ -213,11 +213,11 @@ class SatuSehat extends BaseController
             '44' => ['code' => '722174002', 'display' => 'Pulmonary medicine service'],
             '46' => ['code' => '408472002', 'display' => 'Maternal and child health service'],
             '47' => ['code' => '394602003', 'display' => 'Rehabilitation medicine'],
-            '48' => ['code' => '408462001', 'display' => 'Nutrition service'],
+            '48' => ['code' => '419192003', 'display' => 'Internal medicine'],
             '49' => ['code' => '419192003', 'display' => 'Internal medicine service'],
             '50' => ['code' => '410158009', 'display' => 'Physiotherapy service'],
             '52' => ['code' => '702873001', 'display' => 'Health check service'],
-            '53' => ['code' => '722162002', 'display' => 'Psychology service'],
+            '53' => ['code' => '408460008', 'display' => 'Psychiatry service'],
             '54' => ['code' => '185389009', 'display' => 'Home visit service'],
             '55' => ['code' => '419192003', 'display' => 'Internal medicine'],
             '56' => ['code' => '419192003', 'display' => 'Internal medicine'],
@@ -229,7 +229,7 @@ class SatuSehat extends BaseController
         $stCode = $serviceTypeMap[$kdPoli]['code'] ?? '419192003';
         $stDisplay = $serviceTypeMap[$kdPoli]['display'] ?? 'Internal medicine';
 
-        if (in_array($stCode, ['408457005', '408478007', '408469000', '408476003', '408474000'])) {
+        if (in_array($stCode, ['408457005', '408478007', '408469000', '408476003', '408474000', '408455002', '408450007', '722163007', '722164001', '408462001', '722162002'])) {
             $stCode = '419192003';
             $stDisplay = 'Internal medicine';
         }
