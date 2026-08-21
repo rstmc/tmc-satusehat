@@ -64,90 +64,119 @@ class Register extends Model
                       NULL AS NmBedKemenkes,
                       MAX(A.KdIcd) AS KdIcd,
                       MAX(CAST(E.DIAGNOSA AS NVARCHAR(MAX))) AS NmIcd,
-                      MAX(CAST(F.Subjective AS NVARCHAR(MAX))) AS Subjective,
-                      MAX(CAST(F.Objective AS NVARCHAR(MAX))) AS Objective,
-                      MAX(CAST(F.Assessment AS NVARCHAR(MAX))) AS Assessment,
-                      MAX(CAST(F.Planning AS NVARCHAR(MAX))) AS Planning,
+                      MAX(CAST(F.Subjective AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT) AS Subjective,
+                      MAX(COALESCE(
+                          NULLIF(CAST(F.Objective AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(
+                              SUBSTRING(
+                                  CONCAT(
+                                      CASE WHEN NULLIF(LTRIM(RTRIM(CAST(G_TRI.klhutm AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT)), '') IS NOT NULL THEN ', ' + LTRIM(RTRIM(CAST(G_TRI.klhutm AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT)) ELSE '' END,
+                                      CASE WHEN NULLIF(LTRIM(RTRIM(CAST(G_TRI.anamnesis AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT)), '') IS NOT NULL THEN ', ' + LTRIM(RTRIM(CAST(G_TRI.anamnesis AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT)) ELSE '' END,
+                                      CASE WHEN NULLIF(LTRIM(RTRIM(CAST(G_TRI.diagnosis AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT)), '') IS NOT NULL THEN ', ' + LTRIM(RTRIM(CAST(G_TRI.diagnosis AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT)) ELSE '' END
+                                  ),
+                                  3,
+                                  4000
+                              ),
+                              ''
+                          )
+                      ) COLLATE DATABASE_DEFAULT) AS Objective,
+                      MAX(CAST(F.Assessment AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT) AS Assessment,
+                      MAX(COALESCE(
+                          NULLIF(CAST(F.Planning AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(
+                              SUBSTRING(
+                                  CONCAT(
+                                      CASE WHEN NULLIF(LTRIM(RTRIM(CAST(G_TRI.tm_ket1 AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT)), '') IS NOT NULL THEN ', ' + LTRIM(RTRIM(CAST(G_TRI.tm_ket1 AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT)) ELSE '' END,
+                                      CASE WHEN NULLIF(LTRIM(RTRIM(CAST(G_TRI.tm_ket2 AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT)), '') IS NOT NULL THEN ', ' + LTRIM(RTRIM(CAST(G_TRI.tm_ket2 AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT)) ELSE '' END,
+                                      CASE WHEN NULLIF(LTRIM(RTRIM(CAST(G_TRI.tm_ket3 AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT)), '') IS NOT NULL THEN ', ' + LTRIM(RTRIM(CAST(G_TRI.tm_ket3 AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT)) ELSE '' END,
+                                      CASE WHEN NULLIF(LTRIM(RTRIM(CAST(G_TRI.tm_ket4 AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT)), '') IS NOT NULL THEN ', ' + LTRIM(RTRIM(CAST(G_TRI.tm_ket4 AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT)) ELSE '' END
+                                  ),
+                                  3,
+                                  4000
+                              ),
+                              ''
+                          )
+                      ) COLLATE DATABASE_DEFAULT) AS Planning,
                       '25064002' AS SnomedCodeKeluhanUtama,
                       'Feeling unwell' AS SnomedDisplayKeluhanUtama,
 
                       -- ── Vital Signs & Asesmen Rawat Jalan / IGD ──
                       MAX(COALESCE(
-                          NULLIF(G.sistol_text, ''),
-                          NULLIF(CAST(G_ANAK.td1 AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_GIGI.td1 AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_MAT.td1 AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_TRI.tdsistol_akhir AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_TRI.tdsistol AS VARCHAR(50)), '')
-                      )) AS Sistole,
+                          NULLIF(CAST(G.sistol_text AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_ANAK.td1 AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_GIGI.td1 AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_MAT.td1 AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_TRI.tdsistol_akhir AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_TRI.tdsistol AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, '')
+                      ) COLLATE DATABASE_DEFAULT) AS Sistole,
 
                       MAX(COALESCE(
-                          NULLIF(G.diastol_text, ''),
-                          NULLIF(CAST(G_ANAK.diastole AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_GIGI.td2 AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_MAT.td2 AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_TRI.tddiastol_akhir AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_TRI.tddiastol AS VARCHAR(50)), '')
-                      )) AS Diastole,
+                          NULLIF(CAST(G.diastol_text AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_ANAK.diastole AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_GIGI.td2 AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_MAT.td2 AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_TRI.tddiastol_akhir AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_TRI.tddiastol AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, '')
+                      ) COLLATE DATABASE_DEFAULT) AS Diastole,
 
                       MAX(COALESCE(
-                          NULLIF(CAST(G.suhu AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_ANAK.sh AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_GIGI.sh AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_MAT.sh AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_TRI.suhu_akhir AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_TRI.suhu AS VARCHAR(50)), '')
-                      )) AS Suhu,
+                          NULLIF(CAST(G.suhu AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_ANAK.sh AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_GIGI.sh AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_MAT.sh AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_TRI.suhu_akhir AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_TRI.suhu AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, '')
+                      ) COLLATE DATABASE_DEFAULT) AS Suhu,
 
                       MAX(COALESCE(
-                          NULLIF(CAST(G.pernafasan AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_ANAK.nfs AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_GIGI.nfs AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_MAT.nfs AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_TRI.fknafas_akhir AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_TRI.fknafas AS VARCHAR(50)), '')
-                      )) AS Pernapasan,
+                          NULLIF(CAST(G.pernafasan AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_ANAK.nfs AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_GIGI.nfs AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_MAT.nfs AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_TRI.fknafas_akhir AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_TRI.fknafas AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, '')
+                      ) COLLATE DATABASE_DEFAULT) AS Pernapasan,
 
                       MAX(COALESCE(
-                          NULLIF(CAST(G.saturasi_oxygen AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_ANAK.spo2 AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_GIGI.spo2 AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_MAT.spo2 AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_TRI.sp_akhir AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_TRI.sp AS VARCHAR(50)), '')
-                      )) AS SpO2,
+                          NULLIF(CAST(G.saturasi_oxygen AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_ANAK.spo2 AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_GIGI.spo2 AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_MAT.spo2 AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_TRI.sp_akhir AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_TRI.sp AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, '')
+                      ) COLLATE DATABASE_DEFAULT) AS SpO2,
 
                       MAX(COALESCE(
-                          NULLIF(CAST(G.nadi AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_ANAK.nd AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_GIGI.nd AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_MAT.nd AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_TRI.fknadi_akhir AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_TRI.fknadi AS VARCHAR(50)), '')
-                      )) AS Nadi,
+                          NULLIF(CAST(G.nadi AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_ANAK.nd AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_GIGI.nd AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_MAT.nd AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_TRI.fknadi_akhir AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_TRI.fknadi AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, '')
+                      ) COLLATE DATABASE_DEFAULT) AS Nadi,
 
                       MAX(COALESCE(
-                          NULLIF(CAST(G.tinggi_badan AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_ANAK.tgi AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_GIGI.tb AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_MAT.tb AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_TRI.tb AS VARCHAR(50)), '')
-                      )) AS TinggiBadan,
+                          NULLIF(CAST(G.tinggi_badan AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_ANAK.tgi AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_GIGI.tb AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_MAT.tb AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_TRI.tb AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, '')
+                      ) COLLATE DATABASE_DEFAULT) AS TinggiBadan,
 
                       MAX(COALESCE(
-                          NULLIF(CAST(G.berat_badan AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_ANAK.bb AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_GIGI.bb AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_MAT.bb AS VARCHAR(50)), ''),
-                          NULLIF(CAST(G_TRI.bb AS VARCHAR(50)), '')
-                      )) AS BeratBadan,
+                          NULLIF(CAST(G.berat_badan AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_ANAK.bb AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_GIGI.bb AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_MAT.bb AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_TRI.bb AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, '')
+                      ) COLLATE DATABASE_DEFAULT) AS BeratBadan,
 
-                      MAX(G.riwayat_alergi) AS RiwayatAlergi,
-                      MAX(G.riwayat_alergi_opsi) AS RiwayatAlergiOpsi,
+                      MAX(CAST(G.riwayat_alergi AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT) AS RiwayatAlergi,
+                      MAX(CAST(G.riwayat_alergi_opsi AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT) AS RiwayatAlergiOpsi,
                       MAX(COALESCE(
-                          NULLIF(G.reaksi_alergi, ''),
-                          NULLIF(G_TRI.alrglain, '')
-                      )) AS ReaksiAlergi,
+                          NULLIF(CAST(G.reaksi_alergi AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_TRI.alrglain AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT, '')
+                      ) COLLATE DATABASE_DEFAULT) AS ReaksiAlergi,
 
                       NULL AS TglPulang,
                       NULL AS JamPulang
@@ -233,73 +262,73 @@ class Register extends Model
                       MAX(COALESCE(
                           CASE 
                               WHEN DATEDIFF(day, B.Bod, A.Regdate) <= 18 THEN NULL
-                              WHEN DATEDIFF(day, B.Bod, A.Regdate) <= (365 * 18) THEN CAST(AN.td AS VARCHAR(50))
-                              ELSE CAST(DWS.tvit2 AS VARCHAR(50))
+                              WHEN DATEDIFF(day, B.Bod, A.Regdate) <= (365 * 18) THEN CAST(AN.td AS VARCHAR(50)) COLLATE DATABASE_DEFAULT
+                              ELSE CAST(DWS.tvit2 AS VARCHAR(50)) COLLATE DATABASE_DEFAULT
                           END,
                           CASE 
-                              WHEN CK_RANAP.tensi LIKE '%/%' THEN LEFT(CK_RANAP.tensi, CHARINDEX('/', CK_RANAP.tensi) - 1)
-                              ELSE NULLIF(CK_RANAP.tensi, '')
+                              WHEN CK_RANAP.tensi LIKE '%/%' THEN CAST(LEFT(CK_RANAP.tensi, CHARINDEX('/', CK_RANAP.tensi) - 1) AS VARCHAR(50)) COLLATE DATABASE_DEFAULT
+                              ELSE NULLIF(CAST(CK_RANAP.tensi AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, '')
                           END
-                      )) AS Sistole,
+                      ) COLLATE DATABASE_DEFAULT) AS Sistole,
 
                       MAX(COALESCE(
                           CASE 
                               WHEN DATEDIFF(day, B.Bod, A.Regdate) <= 18 THEN NULL
-                              WHEN DATEDIFF(day, B.Bod, A.Regdate) <= (365 * 18) THEN CAST(AN.td_diastol AS VARCHAR(50))
-                              ELSE CAST(DWS.tvit1_diastol AS VARCHAR(50))
+                              WHEN DATEDIFF(day, B.Bod, A.Regdate) <= (365 * 18) THEN CAST(AN.td_diastol AS VARCHAR(50)) COLLATE DATABASE_DEFAULT
+                              ELSE CAST(DWS.tvit1_diastol AS VARCHAR(50)) COLLATE DATABASE_DEFAULT
                           END,
                           CASE 
-                              WHEN CK_RANAP.tensi LIKE '%/%' THEN SUBSTRING(CK_RANAP.tensi, CHARINDEX('/', CK_RANAP.tensi) + 1, 50)
+                              WHEN CK_RANAP.tensi LIKE '%/%' THEN CAST(SUBSTRING(CK_RANAP.tensi, CHARINDEX('/', CK_RANAP.tensi) + 1, 50) AS VARCHAR(50)) COLLATE DATABASE_DEFAULT
                               ELSE NULL
                           END
-                      )) AS Diastole,
+                      ) COLLATE DATABASE_DEFAULT) AS Diastole,
 
                       MAX(COALESCE(
                           CASE 
-                              WHEN DATEDIFF(day, B.Bod, A.Regdate) <= 18 THEN CAST(NEO.suhu AS VARCHAR(50))
-                              WHEN DATEDIFF(day, B.Bod, A.Regdate) <= (365 * 18) THEN CAST(AN.sh AS VARCHAR(50))
-                              ELSE CAST(DWS.tvit11 AS VARCHAR(50))
+                              WHEN DATEDIFF(day, B.Bod, A.Regdate) <= 18 THEN CAST(NEO.suhu AS VARCHAR(50)) COLLATE DATABASE_DEFAULT
+                              WHEN DATEDIFF(day, B.Bod, A.Regdate) <= (365 * 18) THEN CAST(AN.sh AS VARCHAR(50)) COLLATE DATABASE_DEFAULT
+                              ELSE CAST(DWS.tvit11 AS VARCHAR(50)) COLLATE DATABASE_DEFAULT
                           END,
-                          NULLIF(CAST(CK_RANAP.suhu AS VARCHAR(50)), '')
-                      )) AS Suhu,
+                          NULLIF(CAST(CK_RANAP.suhu AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, '')
+                      ) COLLATE DATABASE_DEFAULT) AS Suhu,
 
                       MAX(COALESCE(
                           CASE 
-                              WHEN DATEDIFF(day, B.Bod, A.Regdate) <= 18 THEN CAST(NEO.respi AS VARCHAR(50))
-                              WHEN DATEDIFF(day, B.Bod, A.Regdate) <= (365 * 18) THEN CAST(AN.nfs AS VARCHAR(50))
-                              ELSE CAST(DWS.tvit8 AS VARCHAR(50))
+                              WHEN DATEDIFF(day, B.Bod, A.Regdate) <= 18 THEN CAST(NEO.respi AS VARCHAR(50)) COLLATE DATABASE_DEFAULT
+                              WHEN DATEDIFF(day, B.Bod, A.Regdate) <= (365 * 18) THEN CAST(AN.nfs AS VARCHAR(50)) COLLATE DATABASE_DEFAULT
+                              ELSE CAST(DWS.tvit8 AS VARCHAR(50)) COLLATE DATABASE_DEFAULT
                           END,
-                          NULLIF(CAST(CK_RANAP.pernapasan AS VARCHAR(50)), '')
-                      )) AS Pernapasan,
+                          NULLIF(CAST(CK_RANAP.pernapasan AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, '')
+                      ) COLLATE DATABASE_DEFAULT) AS Pernapasan,
 
                       MAX(COALESCE(
                           CASE 
                               WHEN DATEDIFF(day, B.Bod, A.Regdate) <= 18 THEN NULL
-                              WHEN DATEDIFF(day, B.Bod, A.Regdate) <= (365 * 18) THEN CAST(AN.spo2 AS VARCHAR(50))
-                              ELSE CAST(DWS.tvit14 AS VARCHAR(50))
+                              WHEN DATEDIFF(day, B.Bod, A.Regdate) <= (365 * 18) THEN CAST(AN.spo2 AS VARCHAR(50)) COLLATE DATABASE_DEFAULT
+                              ELSE CAST(DWS.tvit14 AS VARCHAR(50)) COLLATE DATABASE_DEFAULT
                           END,
-                          NULLIF(CAST(CK_RANAP.spo2 AS VARCHAR(50)), '')
-                      )) AS SpO2,
+                          NULLIF(CAST(CK_RANAP.spo2 AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, '')
+                      ) COLLATE DATABASE_DEFAULT) AS SpO2,
 
                       MAX(COALESCE(
                           CASE 
-                              WHEN DATEDIFF(day, B.Bod, A.Regdate) <= 18 THEN CAST(NEO.fdj AS VARCHAR(50))
-                              WHEN DATEDIFF(day, B.Bod, A.Regdate) <= (365 * 18) THEN CAST(AN.nd AS VARCHAR(50))
-                              ELSE CAST(DWS.tvit5 AS VARCHAR(50))
+                              WHEN DATEDIFF(day, B.Bod, A.Regdate) <= 18 THEN CAST(NEO.fdj AS VARCHAR(50)) COLLATE DATABASE_DEFAULT
+                              WHEN DATEDIFF(day, B.Bod, A.Regdate) <= (365 * 18) THEN CAST(AN.nd AS VARCHAR(50)) COLLATE DATABASE_DEFAULT
+                              ELSE CAST(DWS.tvit5 AS VARCHAR(50)) COLLATE DATABASE_DEFAULT
                           END,
-                          NULLIF(CAST(CK_RANAP.nadi AS VARCHAR(50)), '')
-                      )) AS Nadi,
+                          NULLIF(CAST(CK_RANAP.nadi AS VARCHAR(50)) COLLATE DATABASE_DEFAULT, '')
+                      ) COLLATE DATABASE_DEFAULT) AS Nadi,
 
                       MAX(CASE 
-                          WHEN DATEDIFF(day, B.Bod, A.Regdate) <= 18 THEN CAST(NEO.pb1 AS VARCHAR(50))
-                          WHEN DATEDIFF(day, B.Bod, A.Regdate) <= (365 * 18) THEN CAST(AN.tbanak AS VARCHAR(50))
-                          ELSE CAST(DWS.kg6 AS VARCHAR(50))
+                          WHEN DATEDIFF(day, B.Bod, A.Regdate) <= 18 THEN CAST(NEO.pb1 AS VARCHAR(50)) COLLATE DATABASE_DEFAULT
+                          WHEN DATEDIFF(day, B.Bod, A.Regdate) <= (365 * 18) THEN CAST(AN.tbanak AS VARCHAR(50)) COLLATE DATABASE_DEFAULT
+                          ELSE CAST(DWS.kg6 AS VARCHAR(50)) COLLATE DATABASE_DEFAULT
                       END) AS TinggiBadan,
 
                       MAX(CASE 
-                          WHEN DATEDIFF(day, B.Bod, A.Regdate) <= 18 THEN CAST(NEO.bb AS VARCHAR(50))
-                          WHEN DATEDIFF(day, B.Bod, A.Regdate) <= (365 * 18) THEN CAST(AN.bbanak AS VARCHAR(50))
-                          ELSE CAST(DWS.kg4 AS VARCHAR(50))
+                          WHEN DATEDIFF(day, B.Bod, A.Regdate) <= 18 THEN CAST(NEO.bb AS VARCHAR(50)) COLLATE DATABASE_DEFAULT
+                          WHEN DATEDIFF(day, B.Bod, A.Regdate) <= (365 * 18) THEN CAST(AN.bbanak AS VARCHAR(50)) COLLATE DATABASE_DEFAULT
+                          ELSE CAST(DWS.kg4 AS VARCHAR(50)) COLLATE DATABASE_DEFAULT
                       END) AS BeratBadan,
 
                       NULL AS RiwayatAlergi,
