@@ -653,15 +653,21 @@ class SatuSehat extends BaseController
         }
 
         if (!$goalAlreadySent && !empty($row['IHSSatuSehat'])) {
-            try {
-                $resGoal = $this->service->get('Goal', [
-                    'subject' => $row['IHSSatuSehat']
-                ]);
-                if (($resGoal['total'] ?? 0) > 0) {
-                    $goalAlreadySent = true;
-                }
-            } catch (\Exception $e) {
-                // Abaikan jika pencarian Goal gagal
+            $patientIhs = $row['IHSSatuSehat'];
+            $goalQueries = [
+                ['subject' => $patientIhs],
+                ['patient' => $patientIhs],
+                ['subject' => 'Patient/' . $patientIhs],
+                ['patient' => 'Patient/' . $patientIhs],
+            ];
+            foreach ($goalQueries as $gq) {
+                try {
+                    $resGoal = $this->service->get('Goal', $gq);
+                    if (!empty($resGoal['entry']) || ($resGoal['total'] ?? 0) > 0) {
+                        $goalAlreadySent = true;
+                        break;
+                    }
+                } catch (\Throwable $e) {}
             }
         }
 
@@ -839,9 +845,6 @@ class SatuSehat extends BaseController
         $medRequestUuids = []; // Map (NoResep_KodeObat) or KodeObat -> MedicationRequest UUID
         foreach ($obatsTemp as $index => $obat) {
             $kfaKey = trim($obat['KFA'] ?? '');
-            // if (empty($kfaKey) || !is_numeric($kfaKey)) {
-            //     continue; // Skip item tanpa KFA valid
-            // }
             if (empty($kfaKey)) {
                 continue; // Skip item tanpa KFA valid
             }
@@ -853,35 +856,48 @@ class SatuSehat extends BaseController
                 continue;
             }
 
-            $reqUuid = 'urn:uuid:' . $this->generateUuid();
-          
-
-            // Map the MedicationRequest UUID
             $noResep = trim($obat['NoResep'] ?? ($obat['BLCode'] ?? ''));
-            $mapKey = $noResep . '_' . $itemKode;
-            $medRequestUuids[$mapKey] = $reqUuid;
-            if ($itemKode && !isset($medRequestUuids[$itemKode])) {
-                $medRequestUuids[$itemKode] = $reqUuid;
+            $mrSubtype = 'medreq_' . ($noResep ?: 'no') . '_' . $itemKode . '_' . ($index + 1);
+            $sentKey = 'MedicationRequest:' . $mrSubtype;
+
+            $reqUuid = null;
+            if (isset($sentSubtypes[$sentKey])) {
+                $existingId = $sentSubtypes[$sentKey];
+                if ($existingId && $existingId !== 'ALREADY-ON-KEMKES' && preg_match('/^[0-9a-fA-F-]{36}$/', $existingId)) {
+                    $reqUuid = 'MedicationRequest/' . $existingId;
+                }
+            } else {
+                $reqUuid = 'urn:uuid:' . $this->generateUuid();
             }
 
-            $reqData = array_merge($row, $obat);
-            $reqData['NoResep'] = $noResep;
-            $reqData['MedicationId'] = $medUuid;
-            $reqData['TglResep'] = $obat['TglResep'] ?? ($obat['RegDate'] ?? ($obat['Regdate'] ?? null));
-            $reqData['AturanPakai'] = $obat['AturanPakai'] ?? null;
-            $notes = [];
-            if (!empty($obat['NoteCaraMinumObat'])) $notes[] = $obat['NoteCaraMinumObat'];
-            if (!empty($obat['NoteSigna'])) $notes[] = $obat['NoteSigna'];
-            $reqData['CatatanMinum'] = implode(', ', $notes);
-            $reqData['InstruksiPasien'] = $obat['KeteranganPakai'] ?? null;
-            $reqData['JumlahObat'] = $obat['Qty'] ?? null;
-            $reqData['SatuanObat'] = $obat['Satuan'] ?? 'TAB';
+            // Map the MedicationRequest UUID
+            $mapKey = $noResep . '_' . $itemKode;
+            if ($reqUuid) {
+                $medRequestUuids[$mapKey] = $reqUuid;
+                if ($itemKode && !isset($medRequestUuids[$itemKode])) {
+                    $medRequestUuids[$itemKode] = $reqUuid;
+                }
+            }
 
-            if (method_exists($medicationRequestController, 'buildPayload')) {
-                $reqPayload = $medicationRequestController->buildPayload($reqData, $encounterId);
-                if ($reqPayload) {
-                    $mrSubtype = 'medreq_' . ($noResep ?: 'no') . '_' . $itemKode . '_' . ($index + 1);
-                    $addEntry($reqPayload, ['type' => 'MedicationRequest', 'subtype' => $mrSubtype, 'local_id' => $itemKode], 'POST', 'MedicationRequest', true, $reqUuid);
+            if (!isset($sentSubtypes[$sentKey])) {
+                $reqData = array_merge($row, $obat);
+                $reqData['NoResep'] = $noResep;
+                $reqData['MedicationId'] = $medUuid;
+                $reqData['TglResep'] = $obat['TglResep'] ?? ($obat['RegDate'] ?? ($obat['Regdate'] ?? null));
+                $reqData['AturanPakai'] = $obat['AturanPakai'] ?? null;
+                $notes = [];
+                if (!empty($obat['NoteCaraMinumObat'])) $notes[] = $obat['NoteCaraMinumObat'];
+                if (!empty($obat['NoteSigna'])) $notes[] = $obat['NoteSigna'];
+                $reqData['CatatanMinum'] = implode(', ', $notes);
+                $reqData['InstruksiPasien'] = $obat['KeteranganPakai'] ?? null;
+                $reqData['JumlahObat'] = $obat['Qty'] ?? null;
+                $reqData['SatuanObat'] = $obat['Satuan'] ?? 'TAB';
+
+                if (method_exists($medicationRequestController, 'buildPayload')) {
+                    $reqPayload = $medicationRequestController->buildPayload($reqData, $encounterId);
+                    if ($reqPayload) {
+                        $addEntry($reqPayload, ['type' => 'MedicationRequest', 'subtype' => $mrSubtype, 'local_id' => $itemKode], 'POST', 'MedicationRequest', true, $reqUuid);
+                    }
                 }
             }
         }
@@ -906,29 +922,38 @@ class SatuSehat extends BaseController
             $mapKey = $noResep . '_' . $itemKode;
             $reqUuid = $medRequestUuids[$mapKey] ?? ($medRequestUuids[$itemKode] ?? null);
 
+            $mrSubtype = 'medreq_' . ($noResep ?: 'no') . '_' . $itemKode . '_' . $dispenseUrutan;
+            $sentReqKey = 'MedicationRequest:' . $mrSubtype;
+
             if (!$reqUuid) {
-                // Generate a new MedicationRequest on the fly so MedicationDispense has its mandatory reference
-                $reqUuid = 'urn:uuid:' . $this->generateUuid();
-                $medRequestUuids[$mapKey] = $reqUuid;
+                if (isset($sentSubtypes[$sentReqKey])) {
+                    $existingReqId = $sentSubtypes[$sentReqKey];
+                    if ($existingReqId && $existingReqId !== 'ALREADY-ON-KEMKES' && preg_match('/^[0-9a-fA-F-]{36}$/', $existingReqId)) {
+                        $reqUuid = 'MedicationRequest/' . $existingReqId;
+                    }
+                } else {
+                    // Generate a new MedicationRequest on the fly so MedicationDispense has its mandatory reference
+                    $reqUuid = 'urn:uuid:' . $this->generateUuid();
+                    $medRequestUuids[$mapKey] = $reqUuid;
 
-                $reqData = array_merge($row, $obat);
-                $reqData['Urutan'] = $dispenseUrutan;
-                $reqData['MedicationId'] = $medUuid;
-                $reqData['TglResep'] = $obat['TglResep'] ?? ($obat['RegDate'] ?? ($obat['Regdate'] ?? null));
-                $reqData['AturanPakai'] = $obat['AturanPakai'] ?? null;
-                $notes = [];
-                if (!empty($obat['NoteCaraMinumObat'])) $notes[] = $obat['NoteCaraMinumObat'];
-                if (!empty($obat['NoteSigna'])) $notes[] = $obat['NoteSigna'];
-                $reqData['CatatanMinum'] = implode(', ', $notes);
-                $reqData['InstruksiPasien'] = $obat['KeteranganPakai'] ?? null;
-                $reqData['JumlahObat'] = $obat['Qty'] ?? null;
-                $reqData['SatuanObat'] = $obat['Satuan'] ?? 'TAB';
+                    $reqData = array_merge($row, $obat);
+                    $reqData['Urutan'] = $dispenseUrutan;
+                    $reqData['MedicationId'] = $medUuid;
+                    $reqData['TglResep'] = $obat['TglResep'] ?? ($obat['RegDate'] ?? ($obat['Regdate'] ?? null));
+                    $reqData['AturanPakai'] = $obat['AturanPakai'] ?? null;
+                    $notes = [];
+                    if (!empty($obat['NoteCaraMinumObat'])) $notes[] = $obat['NoteCaraMinumObat'];
+                    if (!empty($obat['NoteSigna'])) $notes[] = $obat['NoteSigna'];
+                    $reqData['CatatanMinum'] = implode(', ', $notes);
+                    $reqData['InstruksiPasien'] = $obat['KeteranganPakai'] ?? null;
+                    $reqData['JumlahObat'] = $obat['Qty'] ?? null;
+                    $reqData['SatuanObat'] = $obat['Satuan'] ?? 'TAB';
 
-                if (method_exists($medicationRequestController, 'buildPayload')) {
-                    $reqPayload = $medicationRequestController->buildPayload($reqData, $encounterId);
-                    if ($reqPayload) {
-                        $mrSubtype = 'medreq_' . ($noResep ?: 'no') . '_' . $itemKode . '_' . $dispenseUrutan;
-                        $addEntry($reqPayload, ['type' => 'MedicationRequest', 'subtype' => $mrSubtype, 'local_id' => $itemKode], 'POST', 'MedicationRequest', true, $reqUuid);
+                    if (method_exists($medicationRequestController, 'buildPayload')) {
+                        $reqPayload = $medicationRequestController->buildPayload($reqData, $encounterId);
+                        if ($reqPayload) {
+                            $addEntry($reqPayload, ['type' => 'MedicationRequest', 'subtype' => $mrSubtype, 'local_id' => $itemKode], 'POST', 'MedicationRequest', true, $reqUuid);
+                        }
                     }
                 }
             }

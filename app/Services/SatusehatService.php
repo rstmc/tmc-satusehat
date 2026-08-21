@@ -189,8 +189,8 @@ class SatusehatService
                  throw new \Exception("Satusehat Error: " . implode(", ", $issues));
             }
 
-            // Kemkes kadang mengembalikan HTTP 200 tetapi body-nya berupa array of rule violations
-            // contoh: [{"ruleNumber":"10024","message":"Code not found: ..."}]
+            // Kemkes mengembalikan body berupa array of rule violations (baik HTTP 200 maupun HTTP 400)
+            // contoh: [{"ruleNumber":"20002","message":"Found duplicate: ..."}]
             if (is_array($body) && !isset($body['resourceType']) && !isset($body['id']) && !isset($body['entry'])) {
                 if (!empty($body) && isset($body[0]['ruleNumber'])) {
                     $messages = array_map(fn($r) => $r['message'] ?? 'Unknown rule error', $body);
@@ -199,6 +199,11 @@ class SatusehatService
             }
 
             if ($res->getStatusCode() >= 400) {
+                 if (is_array($body) && !isset($body['resourceType']) && !empty($body) && isset($body[0]['ruleNumber'])) {
+                     $messages = array_map(fn($r) => $r['message'] ?? 'Unknown rule error', $body);
+                     throw new \Exception("Satusehat Error: " . implode(", ", $messages));
+                 }
+
                  if (is_array($body) && isset($body['resourceType']) && $body['resourceType'] === 'Bundle') {
                       $errors = [];
                       if (!empty($body['entry'])) {
