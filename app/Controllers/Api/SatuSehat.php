@@ -645,11 +645,34 @@ class SatuSehat extends BaseController
         // Or I can implement UUID logic.
         // Let's stick to bundling independent resources + Meds/Labs (which I will handle carefully).
 
-        $tujuanPerawatan = new TujuanPerawatan($this->service);
-        $goalPayload = null;
-        if (method_exists($tujuanPerawatan, 'buildPayload')) {
-            $goalPayload = $tujuanPerawatan->buildPayload($row, $encounterId, null);
-            $addEntry($goalPayload, ['type' => 'Goal', 'subtype' => 'tujuan_perawatan']);
+        // 5. Goal & CarePlan
+        $goalAlreadySent = false;
+        $goalLogModel = new SatuSehatLogModel();
+        if ($goalLogModel->where('Regno', $row['Regno'])->where('resourceType', 'Goal')->countAllResults() > 0) {
+            $goalAlreadySent = true;
+        }
+
+        if (!$goalAlreadySent && !empty($row['IHSSatuSehat'])) {
+            try {
+                $resGoal = $this->service->get('Goal', [
+                    'subject' => $row['IHSSatuSehat']
+                ]);
+                if (($resGoal['total'] ?? 0) > 0) {
+                    $goalAlreadySent = true;
+                }
+            } catch (\Exception $e) {
+                // Abaikan jika pencarian Goal gagal
+            }
+        }
+
+        if (!$goalAlreadySent) {
+            $tujuanPerawatan = new TujuanPerawatan($this->service);
+            if (method_exists($tujuanPerawatan, 'buildPayload')) {
+                $goalPayload = $tujuanPerawatan->buildPayload($row, $encounterId, null);
+                if ($goalPayload) {
+                    $addEntry($goalPayload, ['type' => 'Goal', 'subtype' => 'tujuan_perawatan']);
+                }
+            }
         }
         // Goal UUID?
 

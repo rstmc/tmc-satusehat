@@ -64,23 +64,18 @@ class Register extends Model
                       NULL AS NmBedKemenkes,
                       MAX(A.KdIcd) AS KdIcd,
                       MAX(CAST(E.DIAGNOSA AS NVARCHAR(MAX))) AS NmIcd,
-                      MAX(CAST(F.Subjective AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT) AS Subjective,
+                      MAX(COALESCE(
+                          NULLIF(CAST(F.Subjective AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_TRI.anamnesis AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT, '')
+                      ) COLLATE DATABASE_DEFAULT) AS Subjective,
                       MAX(COALESCE(
                           NULLIF(CAST(F.Objective AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT, ''),
-                          NULLIF(
-                              SUBSTRING(
-                                  CONCAT(
-                                      CASE WHEN NULLIF(LTRIM(RTRIM(CAST(G_TRI.klhutm AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT)), '') IS NOT NULL THEN ', ' + LTRIM(RTRIM(CAST(G_TRI.klhutm AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT)) ELSE '' END,
-                                      CASE WHEN NULLIF(LTRIM(RTRIM(CAST(G_TRI.anamnesis AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT)), '') IS NOT NULL THEN ', ' + LTRIM(RTRIM(CAST(G_TRI.anamnesis AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT)) ELSE '' END,
-                                      CASE WHEN NULLIF(LTRIM(RTRIM(CAST(G_TRI.diagnosis AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT)), '') IS NOT NULL THEN ', ' + LTRIM(RTRIM(CAST(G_TRI.diagnosis AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT)) ELSE '' END
-                                  ),
-                                  3,
-                                  4000
-                              ),
-                              ''
-                          )
+                          NULLIF(CAST(G_TRI.klhutm AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT, '')
                       ) COLLATE DATABASE_DEFAULT) AS Objective,
-                      MAX(CAST(F.Assessment AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT) AS Assessment,
+                      MAX(COALESCE(
+                          NULLIF(CAST(F.Assessment AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT, ''),
+                          NULLIF(CAST(G_TRI.diagnosis AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT, '')
+                      ) COLLATE DATABASE_DEFAULT) AS Assessment,
                       MAX(COALESCE(
                           NULLIF(CAST(F.Planning AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT, ''),
                           NULLIF(

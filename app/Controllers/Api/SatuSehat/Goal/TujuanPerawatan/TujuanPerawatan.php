@@ -8,6 +8,10 @@ class TujuanPerawatan extends GoalBase
 {
     public function buildPayload($row, $encounterId, $conditionId = null)
     {
+        if (empty($row['IHSSatuSehat']) || empty($row['Planning'])) {
+            return null;
+        }
+
         $dateOnly = date('Y-m-d', strtotime($row['Regdate']));
         $dueDate = $dateOnly;
         $orgId = env('SATUSEHAT_ORG_ID') ?: getenv('SATUSEHAT_ORG_ID') ?: ($_ENV['SATUSEHAT_ORG_ID'] ?? '');
