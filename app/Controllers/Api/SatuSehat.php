@@ -1941,8 +1941,7 @@ class SatuSehat extends BaseController
                                     $fullId = $sys !== '' ? ($sys . '|' . $val) : $val;
 
                                     if (
-                                        (!empty($row['Regno']) && $val === $row['Regno']) || 
-                                        (!empty($val) && strpos($identifierQuery, $val) !== false) || 
+                                        (!empty($row['Regno']) && $val === $row['Regno']) ||
                                         $fullId === $identifierQuery
                                     ) {
                                         $entries[] = $item;
