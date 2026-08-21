@@ -37,6 +37,8 @@ $routes->group('api', ['namespace' => 'App\Controllers\Api'], function ($routes)
     $routes->get('satusehat/push-all', 'SatuSehat::pushAll');                          // push semua (by ?date=)
     $routes->get('satusehat/push-regno/(:segment)', 'SatuSehat::pushByRegno/$1');      // push 1 regno
     $routes->get('satusehat/push-date/(:segment)', 'SatuSehat::pushByDate/$1');        // push by tanggal (path param)
+    $routes->get('satusehat/get-encounter', 'SatuSehat::getEncounterById');            // get encounter by query param ?id= / ?encounter_id=
+    $routes->get('satusehat/get-encounter/(:any)', 'SatuSehat::getEncounterById/$1');  // get encounter by path param
     $routes->post('satusehat/encounter-with-ihs', 'SatuSehat::hitEncounterWithIhs');
     $routes->get('satusehat/push-medication/(:any)', 'SatuSehat::pushMedicationByKdObat/$1');
     $routes->get('satusehat/clean-duplicate-medications', 'SatuSehat::cleanDuplicateMedications');

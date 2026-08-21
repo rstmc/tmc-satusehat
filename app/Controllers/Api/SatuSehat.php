@@ -1557,6 +1557,27 @@ class SatuSehat extends BaseController
                     }
                 }
 
+                // Jika masih ada resource yang dilaporkan duplikat oleh Kemkes ("Found duplicate: ResourceType")
+                if (preg_match_all('/Found duplicate:\s*([A-Za-z0-9_]+)/i', $msg, $dupMatches)) {
+                    $duplicateTypes = array_unique($dupMatches[1]);
+                    $logModel = new SatuSehatLogModel();
+                    foreach ($duplicateTypes as $dupType) {
+                        foreach ($entryKeys as $ek) {
+                            if (($ek['type'] ?? '') === $dupType) {
+                                try {
+                                    $logModel->insert([
+                                        'Regno' => $row['Regno'],
+                                        'resourceType' => $dupType,
+                                        'resourceSubType' => $ek['subtype'] ?? '',
+                                        'resourceID' => 'ALREADY-ON-KEMKES',
+                                    ]);
+                                    $cleanedUp = true;
+                                } catch (\Throwable $t) {}
+                            }
+                        }
+                    }
+                }
+
                 // Jika berhasil membersihkan duplikat / menyelaraskan ID, lakukan retry otomatis
                 if ($cleanedUp) {
                     return $this->processRegnoBundle($row, $skippedKfas, $retryCount + 1);
@@ -1706,6 +1727,108 @@ class SatuSehat extends BaseController
     }
 
     /**
+     * Get Encounter by ID directly from SatuSehat Kemkes API
+     * GET /api/satusehat/get-encounter?id=eb0e3f67-1c9b-4698-8019-ca4551f95a4b
+     * or GET /api/satusehat/get-encounter?encounter_id=eb0e3f67-1c9b-4698-8019-ca4551f95a4b
+     * or GET /api/satusehat/get-encounter/eb0e3f67-1c9b-4698-8019-ca4551f95a4b
+     */
+    /**
+     * Get Encounter and all related clinical resources directly from SatuSehat Kemkes API
+     * GET /api/satusehat/get-encounter?id=eb0e3f67-1c9b-4698-8019-ca4551f95a4b
+     * or GET /api/satusehat/get-encounter?encounter_id=eb0e3f67-1c9b-4698-8019-ca4551f95a4b
+     * or GET /api/satusehat/get-encounter/eb0e3f67-1c9b-4698-8019-ca4551f95a4b
+     */
+    public function getEncounterById($id = null)
+    {
+        $encounterId = $id ?: ($this->request->getGet('id') ?: $this->request->getGet('encounter_id'));
+
+        if (empty($encounterId)) {
+            return $this->response->setStatusCode(400)->setJSON([
+                'status' => false,
+                'message' => 'Parameter id atau encounter_id wajib diisi. Contoh: ?id=eb0e3f67-1c9b-4698-8019-ca4551f95a4b'
+            ]);
+        }
+
+        $cleanId = trim($encounterId);
+
+        try {
+            // 1. Fetch Encounter Header dari Kemenkes
+            $encounterData = $this->service->get('Encounter/' . $cleanId);
+
+            // Extract Patient IHS and Regno jika ada
+            $patientRef = $encounterData['subject']['reference'] ?? '';
+            $patientIhs = str_replace('Patient/', '', $patientRef);
+            $regno = $encounterData['identifier'][0]['value'] ?? '';
+
+            // 2. Fetch seluruh resource klinis yang terhubung ke Encounter ini di Kemenkes
+            $related = [];
+            $counts = [];
+
+            $resourceQueries = [
+                'Condition'          => ['encounter' => $cleanId],
+                'Observation'        => ['encounter' => $cleanId],
+                'MedicationRequest'  => ['encounter' => $cleanId],
+                'MedicationDispense' => ['encounter' => $cleanId],
+                'Procedure'          => ['encounter' => $cleanId],
+                'CarePlan'           => ['encounter' => $cleanId],
+                'ClinicalImpression' => ['encounter' => $cleanId],
+                'Composition'        => ['encounter' => $cleanId],
+            ];
+
+            foreach ($resourceQueries as $resType => $params) {
+                try {
+                    $res = $this->service->get($resType, $params);
+                    $entries = $res['entry'] ?? [];
+                    $related[$resType] = array_map(fn($item) => $item['resource'] ?? $item, $entries);
+                    $counts[$resType] = count($entries);
+                } catch (\Throwable $t) {
+                    $related[$resType] = [];
+                    $counts[$resType] = 0;
+                }
+            }
+
+            // Fetch MedicationStatement (pakai parameter context)
+            try {
+                $msRes = $this->service->get('MedicationStatement', ['context' => $cleanId]);
+                $msEntries = $msRes['entry'] ?? [];
+                $related['MedicationStatement'] = array_map(fn($item) => $item['resource'] ?? $item, $msEntries);
+                $counts['MedicationStatement'] = count($msEntries);
+            } catch (\Throwable $t) {
+                $related['MedicationStatement'] = [];
+                $counts['MedicationStatement'] = 0;
+            }
+
+            // 3. Cross-check log lokal di database jika ada regno
+            $localLogs = [];
+            if (!empty($regno)) {
+                try {
+                    $logModel = new SatuSehatLogModel();
+                    $localLogs = $logModel->where('Regno', $regno)->findAll();
+                } catch (\Throwable $t) {}
+            }
+
+            return $this->response->setJSON([
+                'status'                => true,
+                'encounter_id'          => $cleanId,
+                'regno'                 => $regno,
+                'patient_ihs'           => $patientIhs,
+                'total_resources_found' => array_sum($counts) + 1,
+                'counts'                => array_merge(['Encounter' => 1], $counts),
+                'encounter'             => $encounterData,
+                'clinical_data'         => $related,
+                'local_log_count'       => count($localLogs),
+                'local_logs'            => $localLogs
+            ]);
+        } catch (\Exception $e) {
+            return $this->response->setStatusCode(500)->setJSON([
+                'status' => false,
+                'encounter_id' => $cleanId,
+                'message' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
      * Push bundle menggunakan query param ?date= (backward-compatible).
      * GET /api/satusehat/push-all?date=Y-m-d
      */
@@ -1768,40 +1891,48 @@ class SatuSehat extends BaseController
     {
         $entries = [];
 
-        // Strategi 1: Cari via subject (pencarian per pasien paling stabil di SATUSEHAT API, tidak pernah 400/not selective)
+        // Strategi 1: Cari via subject / patient (pencarian per pasien paling stabil di SATUSEHAT API)
         if (!empty($row['IHSSatuSehat']) && !in_array($resourceType, ['Medication', 'Organization'])) {
-            try {
-                $searchRes = $this->service->get($resourceType, ['subject' => $row['IHSSatuSehat'], '_count' => 100]);
-                if (!empty($searchRes['entry']) && is_array($searchRes['entry'])) {
-                    foreach ($searchRes['entry'] as $item) {
-                        $resource = $item['resource'] ?? [];
-                        $identifiers = $resource['identifier'] ?? [];
-                        if (is_array($identifiers)) {
-                            if (isset($identifiers['system'])) {
-                                $identifiers = [$identifiers];
-                            }
-                            foreach ($identifiers as $idObj) {
-                                $val = $idObj['value'] ?? '';
-                                $sys = $idObj['system'] ?? '';
-                                $fullId = $sys !== '' ? ($sys . '|' . $val) : $val;
+            $searchQueries = [
+                ['subject' => $row['IHSSatuSehat'], '_count' => 100],
+                ['patient' => $row['IHSSatuSehat'], '_count' => 100],
+                ['subject' => 'Patient/' . $row['IHSSatuSehat'], '_count' => 100],
+            ];
 
-                                if (
-                                    (!empty($row['Regno']) && $val === $row['Regno']) || 
-                                    (!empty($val) && strpos($identifierQuery, $val) !== false) || 
-                                    $fullId === $identifierQuery
-                                ) {
-                                    $entries[] = $item;
-                                    break;
+            foreach ($searchQueries as $queryParam) {
+                try {
+                    $searchRes = $this->service->get($resourceType, $queryParam);
+                    if (!empty($searchRes['entry']) && is_array($searchRes['entry'])) {
+                        foreach ($searchRes['entry'] as $item) {
+                            $resource = $item['resource'] ?? [];
+                            $identifiers = $resource['identifier'] ?? [];
+                            if (is_array($identifiers)) {
+                                if (isset($identifiers['system'])) {
+                                    $identifiers = [$identifiers];
+                                }
+                                foreach ($identifiers as $idObj) {
+                                    $val = $idObj['value'] ?? '';
+                                    $sys = $idObj['system'] ?? '';
+                                    $fullId = $sys !== '' ? ($sys . '|' . $val) : $val;
+
+                                    if (
+                                        (!empty($row['Regno']) && $val === $row['Regno']) || 
+                                        (!empty($val) && strpos($identifierQuery, $val) !== false) || 
+                                        $fullId === $identifierQuery
+                                    ) {
+                                        $entries[] = $item;
+                                        break;
+                                    }
                                 }
                             }
                         }
                     }
+                    if (!empty($entries)) {
+                        return $entries;
+                    }
+                } catch (\Exception $ex1) {
+                    // Coba parameter query berikutnya jika gagal
                 }
-                if (!empty($entries)) {
-                    return $entries;
-                }
-            } catch (\Exception $ex1) {
-                log_message('error', "findMatchingResourceOnKemkes Strategy 1 error for {$resourceType}: " . $ex1->getMessage());
             }
         }
 
