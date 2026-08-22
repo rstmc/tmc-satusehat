@@ -260,7 +260,7 @@ class SatuSehat extends BaseController
             : ($isRanap ? 'Kelas 3' : 'Kelas Reguler');
 
         $diagnosis = [];
-        if (!empty($row['KdIcd']) && !empty($diagnosisRef)) {
+        if (!empty($row['KdIcd']) && !empty($diagnosisRef) && $diagnosisRef !== 'Condition/ALREADY-ON-KEMKES' && (str_starts_with($diagnosisRef, 'urn:uuid:') || preg_match('#^Condition/[0-9a-fA-F-]{36}$#', $diagnosisRef))) {
             $diagnosis[] = [
                 'condition' => [
                     'reference' => $diagnosisRef,
@@ -612,10 +612,40 @@ class SatuSehat extends BaseController
         };
 
         // ── 4. Encounter masuk bundle sebagai ENTRY PERTAMA ───────────────────
+        $existingCondId = $sentSubtypes['Condition:diagnosis'] ?? null;
+        $validExistingCondId = null;
+
+        if ($existingCondId && $existingCondId !== 'ALREADY-ON-KEMKES' && preg_match('/^[0-9a-fA-F-]{36}$/', $existingCondId)) {
+            $validExistingCondId = $existingCondId;
+        } elseif ($existingCondId === 'ALREADY-ON-KEMKES' || (!empty($existingCondId) && !preg_match('/^[0-9a-fA-F-]{36}$/', $existingCondId))) {
+            // Coba cari ID Condition asli di Kemkes jika sebelumnya ter-flag ALREADY-ON-KEMKES atau ID tidak valid
+            $condIdentifier = 'http://sys-ids.kemkes.go.id/condition/' . $this->getOrgId() . '|' . $row['Regno'] . '-diagnosis-' . ($row['KdIcd'] ?? '');
+            $matchedCond = $this->findMatchingResourceOnKemkes('Condition', $condIdentifier, $row);
+            if (!empty($matchedCond[0]['resource']['id'])) {
+                $validExistingCondId = $matchedCond[0]['resource']['id'];
+                $sentSubtypes['Condition:diagnosis'] = $validExistingCondId;
+                try {
+                    $sentResourcesModel->where('Regno', $row['Regno'])
+                        ->where('resourceType', 'Condition')
+                        ->where('resourceSubType', 'diagnosis')
+                        ->set(['resourceID' => $validExistingCondId])
+                        ->update();
+                } catch (\Throwable $t) {}
+            } else {
+                // Jika tidak ditemukan di Kemkes, hapus dummy flag agar Condition ikut dikirim dalam bundle ini
+                unset($sentSubtypes['Condition:diagnosis']);
+                try {
+                    $sentResourcesModel->where('Regno', $row['Regno'])
+                        ->where('resourceType', 'Condition')
+                        ->where('resourceSubType', 'diagnosis')
+                        ->where('resourceID', 'ALREADY-ON-KEMKES')
+                        ->delete();
+                } catch (\Throwable $t) {}
+            }
+        }
+
         $diagnosisUuid = 'urn:uuid:' . $this->generateUuid();
-        $diagnosisRef = !empty($sentSubtypes['Condition:diagnosis'])
-            ? ('Condition/' . $sentSubtypes['Condition:diagnosis'])
-            : $diagnosisUuid;
+        $diagnosisRef = $validExistingCondId ? ('Condition/' . $validExistingCondId) : $diagnosisUuid;
 
         if ($alreadySentEncounterId) {
             // Encounter sudah ada di Kemkes.
@@ -1944,7 +1974,7 @@ class SatuSehat extends BaseController
                                     $fullId = $sys !== '' ? ($sys . '|' . $val) : $val;
 
                                     if (
-                                        (!empty($row['Regno']) && $val === $row['Regno']) ||
+                                        (!empty($row['Regno']) && ($val === $row['Regno'] || stripos($val, $row['Regno']) !== false)) ||
                                         $fullId === $identifierQuery
                                     ) {
                                         $entries[] = $item;
