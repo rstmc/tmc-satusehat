@@ -173,8 +173,8 @@ class Register extends Model
                           NULLIF(CAST(G_TRI.alrglain AS NVARCHAR(MAX)) COLLATE DATABASE_DEFAULT, '')
                       ) COLLATE DATABASE_DEFAULT) AS ReaksiAlergi,
 
-                      NULL AS TglPulang,
-                      NULL AS JamPulang
+                      MAX(CONVERT(VARCHAR(10), SP.CreatedAt, 120)) AS TglPulang,
+                      MAX(CONVERT(VARCHAR(8), SP.CreatedAt, 108)) AS JamPulang
                   FROM Register A
                   INNER JOIN MasterPS B
                       ON B.MedRec COLLATE DATABASE_DEFAULT
@@ -197,6 +197,13 @@ class Register extends Model
                       AND F.KdDoc COLLATE DATABASE_DEFAULT
                          = A.KdDoc COLLATE DATABASE_DEFAULT
                       AND F.DiisiOleh = 'dokter'
+                  OUTER APPLY (
+                      SELECT TOP 1 * FROM StatusPelayanan
+                      WHERE Regno COLLATE DATABASE_DEFAULT = A.Regno COLLATE DATABASE_DEFAULT
+                        AND Status = 'selesai'
+                        AND Grup = 'erm'
+                      ORDER BY Id DESC
+                  ) SP
                   OUTER APPLY (
                       SELECT TOP 1 * FROM dbFORM.dbo.mp_pengkajian_rawat_jalan
                       WHERE Regno COLLATE DATABASE_DEFAULT = A.Regno COLLATE DATABASE_DEFAULT
@@ -223,6 +230,7 @@ class Register extends Model
                       ORDER BY id DESC
                   ) G_TRI
                   WHERE {$where}
+                    AND A.tmc_no_reg IS NOT NULL
                   GROUP BY A.Regno
 
                   UNION ALL
