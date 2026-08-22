@@ -260,7 +260,7 @@ class SatuSehat extends BaseController
             : ($isRanap ? 'Kelas 3' : 'Kelas Reguler');
 
         $diagnosis = [];
-        if (!empty($row['KdIcd']) && !empty($diagnosisRef) && $diagnosisRef !== 'Condition/ALREADY-ON-KEMKES' && (str_starts_with($diagnosisRef, 'urn:uuid:') || preg_match('#^Condition/[0-9a-fA-F-]{36}$#', $diagnosisRef))) {
+        if (!empty($row['KdIcd']) && !empty($diagnosisRef) && $diagnosisRef !== 'Condition/ALREADY-ON-KEMKES' && (strpos($diagnosisRef, 'urn:uuid:') === 0 || preg_match('#^Condition/[0-9a-fA-F-]{36}$#', $diagnosisRef))) {
             $diagnosis[] = [
                 'condition' => [
                     'reference' => $diagnosisRef,
