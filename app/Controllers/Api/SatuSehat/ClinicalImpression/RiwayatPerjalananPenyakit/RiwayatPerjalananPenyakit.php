@@ -12,10 +12,10 @@ class RiwayatPerjalananPenyakit extends ClinicalImpressionBase
             return null;
         }
 
-        $dateOnly = date('Y-m-d', strtotime($row['Regdate']));
-        $timeOnly = date('H:i:s', strtotime($row['RegTime']));
-        $dateTimeStr = $dateOnly . ' ' . $timeOnly;
-        $effectiveDateTime = date('c', strtotime($dateTimeStr));
+        $effectiveDateTime = $this->service->sanitizeFhirDateTime(
+            $row['RegDate'] ?? $row['Regdate'] ?? null,
+            $row['RegTime'] ?? $row['Regtime'] ?? null
+        );
 
         $orgId = getenv('SATUSEHAT_ORG_ID');
 

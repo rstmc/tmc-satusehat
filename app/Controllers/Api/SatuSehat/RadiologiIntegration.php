@@ -67,10 +67,33 @@ class RadiologiIntegration extends BaseController
 
     public function pushObservationResult()
     {
-        $data = $this->request->getJSON(true);
+        $data = $this->request->getJSON(true) ?: [];
         $encounterId = $data['encounter_id'] ?? null;
         $controller = new RadiologiObservation();
-        $res = $controller->push($data, $encounterId);
+        
+        $obsId = $data['id'] ?? $data['SS_Observation_ID'] ?? $data['observation_id'] ?? null;
+        if (!empty($obsId)) {
+            $res = $controller->patch($obsId, $data);
+        } else {
+            $res = $controller->push($data, $encounterId);
+        }
+        return $this->response->setJSON($res);
+    }
+
+    public function patchObservationResult($id = null)
+    {
+        $data = $this->request->getJSON(true) ?: [];
+        $obsId = $id ?: ($data['id'] ?? $data['SS_Observation_ID'] ?? $data['observation_id'] ?? $this->request->getGet('id'));
+
+        if (!$obsId) {
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => 'Observation ID is required for PATCH'
+            ])->setStatusCode(400);
+        }
+
+        $controller = new RadiologiObservation();
+        $res = $controller->patch($obsId, $data);
         return $this->response->setJSON($res);
     }
 
@@ -137,10 +160,13 @@ class RadiologiIntegration extends BaseController
         }
 
         // 2. Observation (Result)
+        $obsController = new RadiologiObservation();
         if (!empty($row['SS_Observation_ID'])) {
-            $obsRes = ['status' => 'success', 'id' => $row['SS_Observation_ID']];
+            $obsRes = $obsController->patch($row['SS_Observation_ID'], $row);
+            if (!isset($obsRes['id']) && ($obsRes['status'] ?? '') === 'success') {
+                $obsRes['id'] = $row['SS_Observation_ID'];
+            }
         } else {
-            $obsController = new RadiologiObservation();
             $obsRes = $obsController->push($row, $encounterId);
         }
         $results['observation'] = $obsRes;

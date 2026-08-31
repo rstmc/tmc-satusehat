@@ -54,10 +54,33 @@ class LaboratoriumIntegration extends BaseController
      */
     public function pushObservation()
     {
-        $data = $this->request->getJSON(true);
+        $data = $this->request->getJSON(true) ?: [];
         $encounterId = $data['encounter_id'] ?? null;
         $controller  = new LaboratoriumObservation();
-        $res         = $controller->push($data, $encounterId);
+        
+        $obsId = $data['id'] ?? $data['SatusehatObservationId'] ?? $data['observation_id'] ?? null;
+        if (!empty($obsId)) {
+            $res = $controller->patch($obsId, $data);
+        } else {
+            $res = $controller->push($data, $encounterId);
+        }
+        return $this->response->setJSON($res);
+    }
+
+    public function patchObservation($id = null)
+    {
+        $data = $this->request->getJSON(true) ?: [];
+        $obsId = $id ?: ($data['id'] ?? $data['SatusehatObservationId'] ?? $data['observation_id'] ?? $this->request->getGet('id'));
+
+        if (!$obsId) {
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => 'Observation ID is required for PATCH'
+            ])->setStatusCode(400);
+        }
+
+        $controller = new LaboratoriumObservation();
+        $res = $controller->patch($obsId, $data);
         return $this->response->setJSON($res);
     }
 
@@ -148,13 +171,19 @@ class LaboratoriumIntegration extends BaseController
             $detailRow = array_merge($row, $detail);
             $detailRow['SpecimenId'] = $row['SpecimenId'] ?? null;
 
-            // Skip jika Observation sudah pernah berhasil dikirim
+            // Jika Observation sudah pernah berhasil dikirim, lakukan PATCH untuk update hasil baru
             if (!empty($detail['SatusehatObservationId'])) {
-                $observationIds[] = $detail['SatusehatObservationId'];
+                $obsController = new LaboratoriumObservation();
+                $obsRes        = $obsController->patch($detail['SatusehatObservationId'], $detailRow);
+                $obsId         = $obsRes['id'] ?? $detail['SatusehatObservationId'];
+                $observationIds[] = $obsId;
                 $observationResults[] = [
                     'KdPemeriksaan' => $detail['KdPemeriksaan'] ?? '-',
-                    'status'        => 'success',
-                    'id'            => $detail['SatusehatObservationId'],
+                    'NmPemeriksaan' => $detail['NmTarif'] ?? '',
+                    'status'        => $obsRes['status'] ?? 'success',
+                    'id'            => $obsId,
+                    'action'        => $obsRes['action'] ?? 'patched',
+                    'response'      => $obsRes['response'] ?? ($obsRes['message'] ?? null),
                 ];
                 continue;
             }

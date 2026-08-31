@@ -14,10 +14,10 @@ class KeluhanUtama extends ConditionBase
 
         $orgId = getenv('SATUSEHAT_ORG_ID');
 
-        $dateOnly = date('Y-m-d', strtotime($row['Regdate']));
-        $timeOnly = date('H:i:s', strtotime($row['RegTime']));
-        $dateTimeStr = $dateOnly . ' ' . $timeOnly;
-        $recordedDate = date('c', strtotime($dateTimeStr));
+        $recordedDate = $this->service->sanitizeFhirDateTime(
+            $row['RegDate'] ?? $row['Regdate'] ?? null,
+            $row['RegTime'] ?? $row['Regtime'] ?? null
+        );
 
         $payload = [
             "resourceType" => "Condition",

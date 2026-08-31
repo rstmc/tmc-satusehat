@@ -131,6 +131,7 @@ class SatusehatService
                 'Authorization' => "Bearer {$token}",
                 'Content-Type'  => getenv('SATUSEHAT_CONTENT_TYPE') ?: 'application/json',
             ], $extraHeaders);
+            $this->sanitizePayloadDates($payload);
             $res = $this->client->post(
                 getenv('SATUSEHAT_BASE_URL') . "/fhir-r4/v1/{$resource}",
                 [
@@ -169,6 +170,7 @@ class SatusehatService
                 'Authorization' => "Bearer {$token}",
                 'Content-Type'  => getenv('SATUSEHAT_CONTENT_TYPE') ?: 'application/json',
             ], $extraHeaders);
+            $this->sanitizePayloadDates($bundlePayload);
             $res = $this->client->post(
                 getenv('SATUSEHAT_BASE_URL') . "/fhir-r4/v1",
                 [
@@ -239,6 +241,7 @@ class SatusehatService
         return $this->executeWithRetry(function () use ($resource, $id, $payload) {
             $token = $this->token();
             
+            $this->sanitizePayloadDates($payload);
             $res = $this->client->put(
                 getenv('SATUSEHAT_BASE_URL') . "/fhir-r4/v1/{$resource}/{$id}",
                 [
@@ -246,6 +249,44 @@ class SatusehatService
                         'Authorization' => "Bearer {$token}",
                         'Content-Type'  => getenv('SATUSEHAT_CONTENT_TYPE') ?: 'application/json',
                     ],
+                    'json' => $payload,
+                    'http_errors' => false,
+                    'timeout' => (int)(getenv('SATUSEHAT_TIMEOUT') ?: 10),
+                    'connect_timeout' => (int)(getenv('SATUSEHAT_CONNECT_TIMEOUT') ?: 3),
+                ]
+            );
+
+            $body = json_decode($res->getBody(), true);
+            
+            if (isset($body['resourceType']) && $body['resourceType'] === 'OperationOutcome') {
+                 $issues = array_map(function($issue) {
+                    return $issue['diagnostics'] ?? $issue['details']['text'] ?? 'Unknown error';
+                 }, $body['issue'] ?? []);
+                 throw new \Exception("Satusehat Error: " . implode(", ", $issues));
+            }
+
+            if ($res->getStatusCode() >= 400) {
+                 throw new \Exception("HTTP Error " . $res->getStatusCode() . ": " . $res->getBody());
+            }
+
+            return $body;
+        });
+    }
+
+    public function patch(string $resource, string $id, array $payload, array $extraHeaders = []): array
+    {
+        return $this->executeWithRetry(function () use ($resource, $id, $payload, $extraHeaders) {
+            $token = $this->token();
+            
+            $headers = array_merge([
+                'Authorization' => "Bearer {$token}",
+                'Content-Type'  => 'application/json-patch+json',
+            ], $extraHeaders);
+
+            $res = $this->client->patch(
+                getenv('SATUSEHAT_BASE_URL') . "/fhir-r4/v1/{$resource}/{$id}",
+                [
+                    'headers' => $headers,
                     'json' => $payload,
                     'http_errors' => false,
                     'timeout' => (int)(getenv('SATUSEHAT_TIMEOUT') ?: 10),
@@ -314,5 +355,75 @@ class SatusehatService
         $year = date('Y', $timestamp);
 
         return "$dayName, $day $month $year";
+    }
+
+    /**
+     * Memastikan format datetime FHIR valid dan berada dalam rentang yang diizinkan SatuSehat:
+     * - Tidak boleh sebelum 3 Juni 2014 (2014-06-03)
+     * - Tidak boleh di masa depan (Future date > waktu saat ini)
+     */
+    public function sanitizeFhirDateTime($dateInput = null, $timeInput = null, int $addSeconds = 0): string
+    {
+        $dateStr = !empty($dateInput) ? date('Y-m-d', strtotime($dateInput) ?: time()) : date('Y-m-d');
+        $timeStr = !empty($timeInput) ? date('H:i:s', strtotime($timeInput) ?: time()) : date('H:i:s');
+
+        $ts = strtotime("$dateStr $timeStr");
+        if ($ts === false) {
+            $ts = time();
+        }
+
+        $ts += $addSeconds;
+
+        $minTs = strtotime('2014-06-03 00:00:00');
+        $nowTs = time();
+
+        if ($ts < $minTs) {
+            $ts = $minTs;
+        }
+        if ($ts > $nowTs) {
+            $ts = $nowTs;
+        }
+
+        return date('c', $ts);
+    }
+
+    /**
+     * Secara rekursif memvalidasi dan membatasi field tanggal/waktu pada payload FHIR
+     * agar tidak melanggar aturan Kemenkes (tidak boleh masa depan atau sebelum 3 Juni 2014).
+     */
+    public function sanitizePayloadDates(array &$payload): array
+    {
+        $restrictedDateKeys = [
+            'effectiveDateTime',
+            'date',
+            'recordedDate',
+            'recordedDateTime',
+            'authoredOn',
+            'authored',
+            'issued',
+            'occurrenceDateTime',
+            'performedDateTime',
+            'onsetDateTime',
+        ];
+
+        $minTs = strtotime('2014-06-03 00:00:00');
+        $nowTs = time();
+
+        foreach ($payload as $key => &$value) {
+            if (is_array($value)) {
+                $this->sanitizePayloadDates($value);
+            } elseif (is_string($value) && in_array($key, $restrictedDateKeys, true)) {
+                $ts = strtotime($value);
+                if ($ts !== false) {
+                    if ($ts > $nowTs) {
+                        $value = date('c', $nowTs);
+                    } elseif ($ts < $minTs) {
+                        $value = date('c', $minTs);
+                    }
+                }
+            }
+        }
+
+        return $payload;
     }
 }
