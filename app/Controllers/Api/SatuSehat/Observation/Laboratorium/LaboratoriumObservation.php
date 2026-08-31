@@ -124,7 +124,55 @@ class LaboratoriumObservation extends ObservationBase
 
     public function push($row, $encounterId)
     {
+        $obsId = $row['SatusehatObservationId'] ?? $row['SS_Observation_ID'] ?? $row['Observation_id'] ?? $row['ObservationId'] ?? $row['id'] ?? null;
+        if (!empty($obsId)) {
+            return $this->patch($obsId, $row);
+        }
+
         $payload = $this->buildPayload($row, $encounterId);
         return $this->sendFHIRObservation($payload);
+    }
+
+    public function patch($id, $row)
+    {
+        if (empty($id)) {
+            return [
+                'status'  => 'error',
+                'message' => 'Observation ID is required for PATCH'
+            ];
+        }
+
+        if (isset($row[0]['op'])) {
+            return $this->patchFHIRObservation($id, $row);
+        }
+
+        $operations = [];
+
+        if (isset($row['Hasil']) || isset($row['valueString']) || isset($row['IsiHasil'])) {
+            $val = $row['Hasil'] ?? $row['valueString'] ?? $row['IsiHasil'] ?? '';
+            $operations[] = [
+                'op'    => 'replace',
+                'path'  => '/valueString',
+                'value' => (string)$val
+            ];
+        }
+
+        if (!empty($row['status'])) {
+            $operations[] = [
+                'op'    => 'replace',
+                'path'  => '/status',
+                'value' => $row['status']
+            ];
+        }
+
+        if (empty($operations)) {
+            return [
+                'status' => 'success',
+                'id'     => $id,
+                'action' => 'no_change'
+            ];
+        }
+
+        return $this->patchFHIRObservation($id, $operations);
     }
 }

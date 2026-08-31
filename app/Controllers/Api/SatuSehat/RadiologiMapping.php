@@ -86,7 +86,7 @@ class RadiologiMapping
         '06079' => ['loinc' => '24558-9', 'snomed' => '818983003', 'name' => 'USG Abdomen Upp'],
         '06080' => ['loinc' => '', 'xcode' => 'X099307', 'snomed' => '818983003', 'name' => 'USG Abdomen Low'],
         '06081' => ['loinc' => '', 'xcode' => 'X099308', 'snomed' => '818983003', 'name' => 'USG Abdomen dengan Doppler'],
-        '06082' => ['loinc' => '25087-9', 'snomed' => '69748006', 'name' => 'USG Thyroid'],
+        '06082' => ['loinc' => '25010-0', 'snomed' => '69748006', 'name' => 'USG Thyroid'],
         '06083' => ['loinc' => '', 'xcode' => 'X099309', 'snomed' => '69748006', 'name' => 'USG Thyroid dengan Doppler'],
         '06084' => ['loinc' => '25066-3', 'snomed' => '76752008', 'name' => 'USG Mammae'],
         '06085' => ['loinc' => '', 'xcode' => 'X099310', 'snomed' => '76752008', 'name' => 'USG Mammae dengan Doppler'],

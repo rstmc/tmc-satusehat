@@ -6,11 +6,8 @@ class Procedure extends ProcedureBase
 {
     public function buildPayload($row, $encounterId)
     {
-        $dateOnly = date('Y-m-d', strtotime($row['Regdate'] ?? date('Y-m-d')));
-        $timeOnly = date('H:i:s', strtotime($row['RegTime'] ?? date('H:i:s')));
-        $dateTimeStr = $dateOnly . ' ' . $timeOnly;
-        $startTime = date('c', strtotime($dateTimeStr));
-        $endTime = date('c', strtotime($dateTimeStr) + 900);
+        $startTime = $this->service->sanitizeFhirDateTime($row['RegDate'] ?? $row['Regdate'] ?? null, $row['RegTime'] ?? $row['Regtime'] ?? null);
+        $endTime = $this->service->sanitizeFhirDateTime($row['RegDate'] ?? $row['Regdate'] ?? null, $row['RegTime'] ?? $row['Regtime'] ?? null, 900);
 
         $payload = [
             "resourceType" => "Procedure",

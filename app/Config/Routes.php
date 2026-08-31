@@ -51,6 +51,8 @@ $routes->group('api', ['namespace' => 'App\Controllers\Api'], function ($routes)
         $routes->post('service-request', 'RadiologiIntegration::pushServiceRequest');
         $routes->get('imaging-study/search', 'RadiologiIntegration::searchImagingStudy');
         $routes->post('observation-result', 'RadiologiIntegration::pushObservationResult');
+        $routes->patch('observation-result', 'RadiologiIntegration::patchObservationResult');
+        $routes->patch('observation-result/(:segment)', 'RadiologiIntegration::patchObservationResult/$1');
         $routes->post('diagnostic-report', 'RadiologiIntegration::pushDiagnosticReport');
         $routes->post('push-complete', 'RadiologiIntegration::pushRadiologyComplete');
     });
@@ -61,6 +63,8 @@ $routes->group('api', ['namespace' => 'App\Controllers\Api'], function ($routes)
         $routes->post('service-request',  'LaboratoriumIntegration::pushServiceRequest');
         $routes->post('specimen',         'LaboratoriumIntegration::pushSpecimen');
         $routes->post('observation',      'LaboratoriumIntegration::pushObservation');
+        $routes->patch('observation',     'LaboratoriumIntegration::patchObservation');
+        $routes->patch('observation/(:segment)', 'LaboratoriumIntegration::patchObservation/$1');
         $routes->post('diagnostic-report','LaboratoriumIntegration::pushDiagnosticReport');
         $routes->post('push-complete',    'LaboratoriumIntegration::pushLabComplete');
     });

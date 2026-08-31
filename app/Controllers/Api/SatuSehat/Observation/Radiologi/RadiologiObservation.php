@@ -15,6 +15,11 @@ class RadiologiObservation extends ObservationBase
 
     public function push($row, $encounterId)
     {
+        $obsId = $row['SS_Observation_ID'] ?? $row['Observation_id'] ?? $row['ObservationId'] ?? $row['id'] ?? null;
+        if (!empty($obsId)) {
+            return $this->patch($obsId, $row);
+        }
+
         if (empty($row['IHSSatuSehat'])) {
             return [
                 'status' => 'error',
@@ -120,5 +125,102 @@ class RadiologiObservation extends ObservationBase
         }
 
         return $this->sendFHIRObservation($payload);
+    }
+
+    public function patch($id, $row)
+    {
+        if (empty($id)) {
+            return [
+                'status'  => 'error',
+                'message' => 'Observation ID is required for PATCH'
+            ];
+        }
+
+        // Jika $row sudah berupa array JSON-patch operations: [ {"op": "replace", "path": "...", "value": "..."} ]
+        if (isset($row[0]['op'])) {
+            return $this->patchFHIRObservation($id, $row);
+        }
+
+        $operations = [];
+
+        // 1. Update Hasil / valueString jika ada
+        if (isset($row['Hasil']) || isset($row['valueString']) || isset($row['HASIL']) || isset($row['Kesan'])) {
+            $hasilVal = $row['Hasil'] ?? $row['valueString'] ?? $row['HASIL'] ?? $row['Kesan'] ?? '';
+            $operations[] = [
+                'op'    => 'replace',
+                'path'  => '/valueString',
+                'value' => (string)$hasilVal
+            ];
+        }
+
+        // 2. Update status jika ada
+        if (!empty($row['status'])) {
+            $operations[] = [
+                'op'    => 'replace',
+                'path'  => '/status',
+                'value' => $row['status']
+            ];
+        }
+
+        // 3. Update performer (Dokter Radiologi) jika ada
+        if (!empty($row['kdDocSatuSehatRad']) || !empty($row['KdDocSatuSehat']) || !empty($row['KDDOCSATUSEHAT'])) {
+            $docId = $row['kdDocSatuSehatRad'] ?? $row['KdDocSatuSehat'] ?? $row['KDDOCSATUSEHAT'];
+            $docName = $row['NmDocRad'] ?? $row['NmDoc'] ?? $row['NMDOC'] ?? 'Dokter Radiologist';
+            $operations[] = [
+                'op'    => 'replace',
+                'path'  => '/performer',
+                'value' => [
+                    [
+                        'reference' => 'Practitioner/' . $docId,
+                        'display'   => $docName
+                    ]
+                ]
+            ];
+        }
+
+        // 4. Update derivedFrom (ImagingStudy) jika ada
+        if (!empty($row['ImagingStudyId']) || !empty($row['ImagingStudy_id'])) {
+            $imagingStudyId = $row['ImagingStudyId'] ?? $row['ImagingStudy_id'];
+            $operations[] = [
+                'op'    => 'replace',
+                'path'  => '/derivedFrom',
+                'value' => [
+                    [
+                        'reference' => 'ImagingStudy/' . $imagingStudyId
+                    ]
+                ]
+            ];
+        }
+
+        // 5. Update basedOn (ServiceRequest) jika ada
+        if (!empty($row['ServiceRequestId'])) {
+            $operations[] = [
+                'op'    => 'replace',
+                'path'  => '/basedOn',
+                'value' => [
+                    [
+                        'reference' => 'ServiceRequest/' . $row['ServiceRequestId']
+                    ]
+                ]
+            ];
+        }
+
+        if (empty($operations)) {
+            if (isset($row['Hasil'])) {
+                $operations[] = [
+                    'op'    => 'replace',
+                    'path'  => '/valueString',
+                    'value' => (string)$row['Hasil']
+                ];
+            } else {
+                return [
+                    'status' => 'success',
+                    'id'     => $id,
+                    'action' => 'no_change'
+                ];
+            }
+        }
+
+        return $this->patchFHIRObservation($id, $operations);
     }
 }

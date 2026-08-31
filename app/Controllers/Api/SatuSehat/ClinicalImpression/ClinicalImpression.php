@@ -10,13 +10,11 @@ class ClinicalImpression extends ClinicalImpressionBase
     {
         $orgId = getenv('SATUSEHAT_ORG_ID');
 
-        $regDateInput = $row['RegDate'] ?? $row['Regdate'] ?? date('Y-m-d');
-        $regTimeInput = $row['RegTime'] ?? $row['Regtime'] ?? date('H:i:s');
-        $regDate = date('Y-m-d', strtotime($regDateInput));
-        $regTime = date('H:i:s', strtotime($regTimeInput));
-        $timestamp = strtotime("$regDate $regTime") + 1800;
-        $effectiveDateTime = date('c', $timestamp);
-        $date = date('c', $timestamp);
+        $regDateInput = $row['RegDate'] ?? $row['Regdate'] ?? null;
+        $regTimeInput = $row['RegTime'] ?? $row['Regtime'] ?? null;
+        $effectiveDateTime = $this->service->sanitizeFhirDateTime($regDateInput, $regTimeInput, 1800);
+        $date = $effectiveDateTime;
+        $regDate = date('Y-m-d', strtotime($effectiveDateTime));
 
         // Identifier stabil per regno + subtype agar ifNoneExist bisa deteksi duplikat
         // Gunakan subtype 'clinical_impression' (konsisten dengan entryKeys di SatuSehat.php)

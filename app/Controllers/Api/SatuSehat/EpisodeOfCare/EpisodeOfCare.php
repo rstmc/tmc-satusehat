@@ -16,16 +16,10 @@ class EpisodeOfCare extends EpisodeOfCareBase
         $orgId = getenv('SATUSEHAT_ORG_ID');
         $episodeId = $row['EpisodeOfCareId'] ?? '';
         
-        // Normalize dates
-        $regDateInput = $row['RegDate'] ?? $row['Regdate'] ?? date('Y-m-d');
-        $regTimeInput = $row['RegTime'] ?? $row['Regtime'] ?? '00:00:00';
-        
-        $regDate = date('Y-m-d', strtotime($regDateInput));
-        $regTime = date('H:i:s', strtotime($regTimeInput));
-        
-        $startDateTime = strtotime("$regDate $regTime");
-        $startDate = date('c', $startDateTime);
-        // $endDate = date('c', $startDateTime + 3600); // Assume 1 hour duration if same
+        $startDate = $this->service->sanitizeFhirDateTime(
+            $row['RegDate'] ?? $row['Regdate'] ?? null,
+            $row['RegTime'] ?? $row['Regtime'] ?? null
+        );
 
         $payload = [
             "resourceType" => "EpisodeOfCare",
