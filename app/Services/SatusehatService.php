@@ -287,7 +287,7 @@ class SatusehatService
                 getenv('SATUSEHAT_BASE_URL') . "/fhir-r4/v1/{$resource}/{$id}",
                 [
                     'headers' => $headers,
-                    'json' => $payload,
+                    'body' => json_encode($payload),
                     'http_errors' => false,
                     'timeout' => (int)(getenv('SATUSEHAT_TIMEOUT') ?: 10),
                     'connect_timeout' => (int)(getenv('SATUSEHAT_CONNECT_TIMEOUT') ?: 3),
