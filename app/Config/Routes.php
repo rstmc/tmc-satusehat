@@ -70,6 +70,7 @@ $routes->group('api', ['namespace' => 'App\Controllers\Api'], function ($routes)
     $routes->post('dicom/update', 'DicomUpdateController::updatePatientId');
     $routes->post('dicom/update-by-patient', 'DicomUpdateByPatientController::updateByPatientId');
     $routes->post('dicom/send', 'DicomSendController::sendByPatientId');
+    $routes->post('dicom/update-by-patient-new', 'DicomUpdateByPatientControllerNew::updateByPatientId');
 
     // Dokter Foto Routes
     $routes->post('dokterfoto/upload', 'DokterFoto::create');
