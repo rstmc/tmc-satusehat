@@ -33,7 +33,7 @@ class KeluhanPenyerta extends ConditionBase
             ],
             "code" => [
                 "coding" => [
-                    ["system" => "http://snomed.info/sct", "code" => $row['SnomedCodeKeluhanUtama'] ?? 'unknown', "display" => $row['SnomedDisplayKeluhanUtama'] ?? 'Unknown']
+                    ["system" => "http://snomed.info/sct", "code" => (!empty($row['SnomedCodeKeluhanUtama']) ? $row['SnomedCodeKeluhanUtama'] : '404684003'), "display" => (!empty($row['SnomedDisplayKeluhanUtama']) ? $row['SnomedDisplayKeluhanUtama'] : 'Clinical finding')]
                 ]
             ],
             "subject" => ["reference" => "Patient/" . $row['IHSSatuSehat'], "display" => $row['Firstname']],

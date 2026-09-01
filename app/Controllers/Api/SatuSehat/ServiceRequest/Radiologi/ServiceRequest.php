@@ -84,19 +84,25 @@ class ServiceRequest extends ServiceRequestBase
                     "code" => $mapping['loinc'],
                     "display" => $mapping['name']
                 ];
-            }
-            if (!empty($mapping['snomed'])) {
-                $payload['code']['coding'][] = [
-                    "system" => "http://snomed.info/sct",
-                    "code" => $mapping['snomed'],
-                    "display" => $mapping['name']
-                ];
-            }
-            if (!empty($mapping['xcode'])) {
+            } elseif (!empty($mapping['xcode'])) {
                 $payload['code']['coding'][] = [
                     "system" => "http://terminology.kemkes.go.id/CodeSystem/kptl",
                     "code" => $mapping['xcode'],
                     "display" => $mapping['name']
+                ];
+            }
+
+            if (!empty($mapping['snomed'])) {
+                $payload['bodySite'] = [
+                    [
+                        "coding" => [
+                            [
+                                "system" => "http://snomed.info/sct",
+                                "code" => $mapping['snomed'],
+                                "display" => $mapping['name']
+                            ]
+                        ]
+                    ]
                 ];
             }
         }

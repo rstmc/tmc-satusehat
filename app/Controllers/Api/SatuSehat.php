@@ -339,9 +339,9 @@ class SatuSehat extends BaseController
             ];
         }
 
-        // Set status 'finished' jika pasien sudah ada TglPulang dan ada diagnosa (KdIcd)
+        // Set status 'finished' jika pasien sudah ada TglPulang dan ada diagnosa (KdIcd) serta elemen diagnosis terisi
         // SATUSEHAT Rule 10457: Encounter status 'finished' mewajibkan elemen Encounter.diagnosis
-        if (!empty($row['TglPulang']) && !empty($row['KdIcd'])) {
+        if (!empty($row['TglPulang']) && !empty($row['KdIcd']) && !empty($diagnosis)) {
             $status = 'finished';
             $pDate = date('Y-m-d', strtotime($row['TglPulang']));
             $pTime = !empty($row['JamPulang']) ? date('H:i:s', strtotime($row['JamPulang'])) : '23:59:59';
