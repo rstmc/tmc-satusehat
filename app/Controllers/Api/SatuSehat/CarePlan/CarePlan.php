@@ -10,31 +10,10 @@ class CarePlan extends CarePlanBase
             return null;
         }
 
-        $dateInput = $row['CreatedDate'] ?? $row['Regdate'] ?? date('Y-m-d');
-        $timeInput = $row['RegTime'] ?? '00:00:00';
-        $dateTs = strtotime($dateInput);
-        if ($dateTs === false || $dateInput === '0000-00-00') {
-            $dateTs = strtotime(date('Y-m-d'));
-        }
-        $dateStr = date('Y-m-d', $dateTs);
-        $timeTs = strtotime($timeInput);
-        if ($timeTs === false) {
-            $timeTs = strtotime('00:00:00');
-        }
-        $timeStr = date('H:i:s', $timeTs);
-        $ts = strtotime($dateStr . ' ' . $timeStr);
-        if ($ts === false) {
-            $ts = time();
-        }
-        $minTs = strtotime('2014-06-03 00:00:00');
-        $nowTs = time();
-        if ($ts < $minTs) {
-            $ts = $minTs;
-        }
-        if ($ts > $nowTs) {
-            $ts = $nowTs;
-        }
-        $createdDate = date('c', $ts);
+        $createdDate = $this->service->sanitizeFhirDateTime(
+            $row['CreatedDate'] ?? $row['Regdate'] ?? null,
+            $row['RegTime'] ?? null
+        );
 
         $orgId = getenv('SATUSEHAT_ORG_ID');
 

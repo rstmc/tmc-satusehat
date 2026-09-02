@@ -391,7 +391,7 @@ class SatusehatService
      * Secara rekursif memvalidasi dan membatasi field tanggal/waktu pada payload FHIR
      * agar tidak melanggar aturan Kemenkes (tidak boleh masa depan atau sebelum 3 Juni 2014).
      */
-    public function sanitizePayloadDates(array &$payload): array
+    public function sanitizePayloadDates(array &$payload, ?string $parentKey = null): array
     {
         $restrictedDateKeys = [
             'effectiveDateTime',
@@ -404,6 +404,15 @@ class SatusehatService
             'occurrenceDateTime',
             'performedDateTime',
             'onsetDateTime',
+            'created',
+            'dateAsserted',
+            'collectedDateTime',
+            'collectionTime',
+            'preparedTime',
+            'handedOverTime',
+            'compositionDate',
+            'time',
+            'start',
         ];
 
         $minTs = strtotime('2014-06-03 00:00:00');
@@ -411,14 +420,32 @@ class SatusehatService
 
         foreach ($payload as $key => &$value) {
             if (is_array($value)) {
-                $this->sanitizePayloadDates($value);
-            } elseif (is_string($value) && in_array($key, $restrictedDateKeys, true)) {
-                $ts = strtotime($value);
-                if ($ts !== false) {
-                    if ($ts > $nowTs) {
-                        $value = date('c', $nowTs);
-                    } elseif ($ts < $minTs) {
-                        $value = date('c', $minTs);
+                $this->sanitizePayloadDates($value, is_string($key) ? $key : $parentKey);
+                // Jika object period memiliki start dan end, pastikan end >= start
+                if (isset($value['start']) && isset($value['end'])) {
+                    $sTs = strtotime($value['start']);
+                    $eTs = strtotime($value['end']);
+                    if ($sTs !== false && $eTs !== false && $eTs < $sTs) {
+                        $value['end'] = $value['start'];
+                    }
+                }
+            } elseif (is_string($value)) {
+                $shouldCheck = in_array($key, $restrictedDateKeys, true);
+
+                // 'end' date di-clamp kecuali jika berada di dalam validityPeriod (misal resep obat berlaku di masa depan)
+                if ($key === 'end' && $parentKey !== 'validityPeriod') {
+                    $shouldCheck = true;
+                }
+
+                if ($shouldCheck) {
+                    $ts = strtotime($value);
+                    if ($ts !== false) {
+                        $isDateOnly = (bool) preg_match('/^\d{4}-\d{2}-\d{2}$/', trim($value));
+                        if ($ts > $nowTs) {
+                            $value = $isDateOnly ? date('Y-m-d', $nowTs) : date('c', $nowTs);
+                        } elseif ($ts < $minTs) {
+                            $value = $isDateOnly ? date('Y-m-d', $minTs) : date('c', $minTs);
+                        }
                     }
                 }
             }
@@ -427,3 +454,4 @@ class SatusehatService
         return $payload;
     }
 }
+

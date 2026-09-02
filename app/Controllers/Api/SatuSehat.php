@@ -174,9 +174,7 @@ class SatuSehat extends BaseController
     private function buildEncounterPayload(array $row, ?string $diagnosisRef = null): array
     {
         $orgId = $this->getOrgId();
-        $dateOnly = date('Y-m-d', strtotime($row['Regdate']));
-        $timeOnly = date('H:i:s', strtotime($row['RegTime']));
-        $startDateTime = date('c', strtotime($dateOnly . ' ' . $timeOnly));
+        $startDateTime = $this->service->sanitizeFhirDateTime($row['Regdate'] ?? null, $row['RegTime'] ?? null);
 
         $serviceTypeMap = [
             '01' => ['code' => '408464004', 'display' => 'Ophthalmology service'],
@@ -343,9 +341,9 @@ class SatuSehat extends BaseController
         // SATUSEHAT Rule 10457: Encounter status 'finished' mewajibkan elemen Encounter.diagnosis
         if (!empty($row['TglPulang']) && !empty($row['KdIcd']) && !empty($diagnosis)) {
             $status = 'finished';
-            $pDate = date('Y-m-d', strtotime($row['TglPulang']));
-            $pTime = !empty($row['JamPulang']) ? date('H:i:s', strtotime($row['JamPulang'])) : '23:59:59';
-            $endDateTime = date('c', strtotime($pDate . ' ' . $pTime));
+            $pDate = !empty($row['TglPulang']) ? date('Y-m-d', strtotime($row['TglPulang'])) : null;
+            $pTime = !empty($row['JamPulang']) ? date('H:i:s', strtotime($row['JamPulang'])) : date('H:i:s');
+            $endDateTime = $this->service->sanitizeFhirDateTime($pDate, $pTime);
 
             // Pastikan endDateTime tidak lebih awal dari startDateTime
             if (strtotime($endDateTime) < strtotime($startDateTime)) {
